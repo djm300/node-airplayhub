@@ -1,20 +1,34 @@
 #!/usr/bin/env node
 
-var config;
-var zones;
+var fs = require('fs')
+var config = {
+    "servername": "[AirPlay Hub]",
+    "webuiport": 8089,
+    "debug": false,
+    "idletimout": 600,
+    "zones": []
+};
+var configPath = './config.json';
+
 var argv = require('minimist')(process.argv.slice(2));
-if (!argv.c && !argv.config) {
+if (argv.h || argv.help) {
     console.log('usage: node-airplayhub [options]\n  options:\n    -c, --config     Path to config file')
     process.exit();
 } else {
     if (argv.c) {
-        config = require(argv.c);
+        configPath = path.join(__dirname, argv.c);
     } else if (argv.config) {
-        config = require(argv.config);
+        configPath = path.join(__dirname, argv.config);
     }
-    zones = config.zones;
 }
 
+try{
+    config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+} catch(e) {
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+}
+
+var zones = config.zones;
 var express = require('express');
 var logger = require('morgan');
 var path = require('path');
@@ -158,9 +172,11 @@ server.start();
 if (config.debug) { app.use(logger('dev')) };
 
 app.use('/icons', express.static(path.join(__dirname, 'root/icons'), { maxAge: '1y' }));
-app.use(express.static(path.join(__dirname, 'root'), { setHeaders: (res, path, stat)=> {
-    res.setHeader('Cache-Control', 'public, max-age=0');
-}}));
+app.use(express.static(path.join(__dirname, 'root'), {
+    setHeaders: (res, path, stat) => {
+        res.setHeader('Cache-Control', 'public, max-age=0');
+    }
+}));
 
 http.createServer(app).listen(config.webuiport);
 
@@ -216,12 +232,41 @@ app.get('/setvol/:zonename/:volume', function (req, res) {
         }
     }
     config.zones = zones;
-    fs.writeFileSync('/etc/airplayconfig.json', JSON.stringify(config, null, 4));
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     res.json(resp);
 });
 
 app.get('/zones', function (req, res) {
-    res.json(zones);
+    var zonesNotHidden = zones.filter(function (z) {
+        return (!z.hidden);
+    });
+    res.json(zonesNotHidden);
+});
+
+app.get('/hidezone/:zonename', function (req, res) {
+    var zonename = req.params.zonename;
+    var resp = { error: "zone not found" };
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+            zones[i].hidden = true;
+            resp = zones[i];
+        }
+    }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+    res.json(resp);
+});
+
+app.get('/showzone/:zonename', function (req, res) {
+    var zonename = req.params.zonename;
+    var resp = { error: "zone not found" };
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+            zones[i].hidden = false;
+            resp = zones[i];
+        }
+    }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+    res.json(resp);
 });
 
 app.get('/trackinfo', function (req, res) {
@@ -251,7 +296,6 @@ function getArtwork(artist, album, callback) {
     });
 }
 
-
 function getIPAddress(service) {
 
 	addresses = service.addresses;
@@ -264,30 +308,32 @@ function getIPAddress(service) {
 			break;
 		}
 	}
-}
 
 function validateDevice(service) {
 
-    console.log("INCOMING SERVICE "+service.host);
- 
+    // Extract IP address, hostname and port from mdns descriptor
     service.ip = getIPAddress(service);
     service.id = service.ip + ":" + service.port;
+    service.name = service.name.split('@')[1];
 
-	
+    // Ignore self
+    if(service.name == config.servername) return;
+
+    // Check whether we know this zone already - if we do, do not add it again
     var zoneUnknown = true;
     for (var i in zones) {
-        if (zones[i].name.toLowerCase() == service.host.toLowerCase()) {
-            console.log("KNOWN "+service.host);
-	     // Duplicate found which already existed in the config. Mind we match on the fqdn the host claims to have.
-	    zoneUnknown = false;
-	}
+        if (zones[i].name.toLowerCase() == service.name.toLowerCase()) {
+            // Duplicate found which already existed in the config. Mind we match on the fqdn the host claims to have.
+            zoneUnknown = false;
+        }
     }
 
+    // If it is a new zone, thank you very much, add it and write it to our config
+    // TODO: I re-used the ./config.json used elsewhere in this application. Ideally, it should take the parameter passed in --config and not just 'require' the file but properly read it and parse it and write it back here
     if (zoneUnknown) {
-        console.log("ADDING  "+service.host);
-	zones.push({"name": service.host , "host": service.ip,"port": service.port, "volume":0, "enabled":false});	    
-	config.zones = zones;
-        fs.writeFileSync('/etc/airplayconfig.json', JSON.stringify(config, null, 4));
+        zones.push({ "name": service.name, "host": service.ip, "port": service.port, "volume": 0, "enabled": false, "hidden": false });
+        config.zones = zones;
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     }
 
 };
@@ -295,15 +341,15 @@ function validateDevice(service) {
 
 // browse for all raop services
 var browser = bonjour.find({
-	type : 'raop'
+    type: 'raop'
 });
 
-browser.on('up', function(service) {
-	validateDevice(service);
+browser.on('up', function (service) {
+    validateDevice(service);
 });
 
-browser.on('down', function(service) {
-	// TODO
+browser.on('down', function (service) {
+    // TODO
 });
 
 browser.start();
