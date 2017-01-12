@@ -1,0 +1,293 @@
+#!/usr/bin/env node
+
+var config;
+var zones;
+var argv = require('minimist')(process.argv.slice(2));
+if (!argv.c && !argv.config) {
+    console.log('usage: node-airplayhub [options]\n  options:\n    -c, --config     Path to config file')
+    process.exit();
+} else {
+    if (argv.c) {
+        config = require(argv.c);
+    } else if (argv.config) {
+        config = require(argv.config);
+    }
+    zones = config.zones;
+}
+
+var express = require('express');
+var logger = require('morgan');
+var path = require('path');
+var app = express();
+var http = require('http');
+var airtunes = require('airtunes')
+var airtunesserver = require('nodetunes');
+var bonjour = require('bonjour')();
+var fs = require('fs')
+var connectedDevices = [];
+var trackinfo = {};
+var idleTimer;
+
+
+
+
+var server = new airtunesserver({ serverName: config.servername, verbose: config.debug });
+
+server.on('clientConnected', function (stream) {
+    clearTimeout(idleTimer);
+    stream.pipe(airtunes);
+    for (var i in zones) {
+        if (zones[i].enabled) {
+            connectedDevices[i] = airtunes.add(zones[i].host, { port: zones[i].port, volume: zones[i].volume });
+
+        }
+    }
+});
+
+server.on('clientDisconnected', (data) => {
+    clearTimeout(idleTimer);
+    if (config.idletimout > 0) {
+        idleTimer = setTimeout(() => {
+            airtunes.stopAll(() => {
+                for (var i in zones) {
+                    zones[i].enabled = false;
+                }
+            });
+        }, config.idletimout * 1000);
+    }
+});
+
+server.on('metadataChange', (data) => {
+    trackinfo = data;
+    getArtwork(trackinfo.asar, trackinfo.asal, (url) => {
+        if (url) {
+            trackinfo.albumart = url;
+        } else {
+            trackinfo.albumart = '/genericart.png';
+        }
+   if (trackinfo.minm && trackinfo.asar) {
+	   console.log(trackinfo);
+   }
+   });
+});
+
+
+server.on('volumeChange', (data) => {
+    clearTimeout(idleTimer);
+});
+
+server.start();
+
+
+// No need to monitor buffer, this coincides with the clientconnected event and airtunes nicely waits for new nodetunes input (and this stays connected so airtunes remains in buffering mode,  never stopped)
+//airtunes.on('buffer', function(status) {
+//	console.log('buffer', status);
+//});
+
+
+if (config.debug) { app.use(logger('dev')) };
+
+app.use('/icons', express.static(path.join(__dirname, 'root/icons'), { maxAge: '1y' }));
+app.use(express.static(path.join(__dirname, 'root'), { setHeaders: (res, path, stat)=> {
+    res.setHeader('Cache-Control', 'public, max-age=0');
+}}));
+
+http.createServer(app).listen(config.webuiport);
+
+app.get('/', (req, res) => { res.redirect('/Index.html') });
+
+app.get('/startzone/:zonename', function (req, res) {
+    var zonename = req.params.zonename;
+    var resp = { error: "zone not found" };
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+            connectedDevices[i] = airtunes.add(zones[i].host, { port: zones[i].port, volume: zones[i].volume });
+	    connectedDevices[i].on('status', function(status) {
+		console.log(zones[i].host + " STATUS " + status);
+ 	    });
+	    connectedDevices[i].on('error', function(error) {
+		console.log(zones[i].host + " ERROR " + error);
+ 	    });
+            zones[i].enabled = true;
+            resp = zones[i];
+        }
+    }
+    if ("error" in resp) { res.status(404).json(resp); } else { res.status(200).json(resp);  }
+
+});
+
+app.get('/stopzone/:zonename', function (req, res) {
+    var zonename = req.params.zonename;
+    var resp = { error: "zone not found" };
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+            zones[i].enabled = false;
+            if (connectedDevices[i]) {
+                connectedDevices[i].stop();
+            }
+            resp = zones[i];
+        }
+    }
+    if ("error" in resp) { res.status(404).json(resp); } else { res.status(200).json(resp);  }
+
+});
+
+app.get('/setvol/:zonename/:volume', function (req, res) {
+    var zonename = req.params.zonename;
+    var volume = req.params.volume;
+    var resp = { error: "zone not found" };
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+            zones[i].volume = volume;
+            if (connectedDevices[i]) {
+                connectedDevices[i].setVolume(volume);
+ 
+            }
+            resp = zones[i];
+        }
+    }
+    config.zones = zones;
+    fs.writeFileSync('/etc/airplayconfig.json', JSON.stringify(config, null, 4));
+    if ("error" in resp) { res.status(404).json(resp); } else { res.status(200).json(resp);  }
+});
+
+app.get('/zones', function (req, res) {
+    res.json(zones);
+});
+
+app.get('/trackinfo', function (req, res) {
+    res.json(trackinfo);
+});
+
+function getArtwork(artist, album, callback) {
+    var url = `http://itunes.apple.com/search?term=${artist} ${album}`;
+
+    http.get(url, function (res) {
+        var body = '';
+
+        res.on('data', function (chunk) {
+            body += chunk;
+        });
+
+        res.on('end', function () {
+            var albumInfo = JSON.parse(body);
+            if (albumInfo.resultCount > 0) {
+                callback(albumInfo.results[0].artworkUrl100.replace('100x100', '600x600'));
+            } else {
+                callback('/genericart.png');
+            }
+        });
+    }).on('error', function (e) {
+        callback('/genericart.png');
+    });
+}
+
+
+function getIPAddress(service) {
+
+	addresses = service.addresses;
+	// Extract right IPv4 address
+	var rx = /^(?!0)(?!.*\.$)((1?\d?\d|25[0-5]|2[0-4]\d)(\.|$)){4}$/;
+	for ( var a in addresses) {
+		// Test if we can find an ipv4 address
+		if (rx.test(addresses[a]) && addresses[a].lastIndexOf('169', 0) !== 0) {
+			return addresses[a];
+			break;
+		}
+	}
+}
+
+function validateDevice(service) {
+
+    console.log("INCOMING SERVICE "+service.host);
+ 
+    service.ip = getIPAddress(service);
+    service.id = service.ip + ":" + service.port;
+
+	
+    var zoneUnknown = true;
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == service.host.toLowerCase()) {
+            console.log("KNOWN "+service.host);
+	     // Duplicate found which already existed in the config. Mind we match on the fqdn the host claims to have.
+	    zoneUnknown = false;
+	}
+    }
+
+    if (zoneUnknown) {
+        console.log("ADDING  "+service.host);
+	zones.push({"name": service.host , "host": service.ip,"port": service.port, "volume":0, "enabled":false});	    
+	config.zones = zones;
+        fs.writeFileSync('/etc/airplayconfig.json', JSON.stringify(config, null, 4));
+    }
+
+};
+
+
+// browse for all raop services
+var browser = bonjour.find({
+	type : 'raop'
+});
+
+browser.on('up', function(service) {
+	validateDevice(service);
+});
+
+browser.on('down', function(service) {
+	// TODO
+});
+
+browser.start();
+
+var mqttconfig = {
+    prefix: 'airtunes/command',
+    resultprefix: 'airtunes/status',
+    url: 'mqtts://m20.cloudmqtt.com:21414'   
+};
+
+var mqtt    = require('mqtt');
+var mqtt_client  = mqtt.connect(mqttconfig.url , {username: 'pimaticdaemon', password: 'password', will: {topic: mqttconfig.resultprefix + '/connected', payload: '1'}});
+
+var http = require('http');
+var options = {
+  host: 'localhost',
+  path: '/',
+  port: '8089', // optional port
+  method: 'GET'
+};
+
+/* display data returned from REST service */
+rest_callback = function(response) {
+  var str = ''
+  console.log(`STATUS: ${response.statusCode}`);
+  console.log(`STATUS: ${response.statusMessage}`);
+
+  response.on('data', function (chunk) {
+    str += chunk;
+  });
+
+  response.on('end', function () {
+    console.log("REST RESPONSE "+str);
+  });
+}
+
+/* subscribe to some topics */
+mqtt_client.on('connect', function () {
+  mqtt_client.subscribe('airplay/command');
+});
+
+/* forward MQTT packets to REST */
+mqtt_client.on('message', function (topic, message) {
+  console.log("MQTT Received Packet from TTN: ",message.toString());
+
+  console.log("Pushing to REST API... ");
+
+  options.path='/'+message
+  var req = http.request(options, rest_callback);
+  console.log('http request '+options)
+  //console.log( 'Requesting '+ JSON.stringify({topic: topic, message: message.toString()}));
+  //req.write(JSON.stringify({topic: topic, message: message.toString()}));
+  req.end();
+
+});
+
