@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+var path = require('path');
 var fs = require('fs')
 var config = {
     "servername": "[AirPlay Hub]",
@@ -15,11 +16,9 @@ if (argv.h || argv.help) {
     console.log('usage: node-airplayhub [options]\n  options:\n    -c, --config     Path to config file')
     process.exit();
 } else {
-    if (argv.c) {
-        configPath = path.join(__dirname, argv.c);
-    } else if (argv.config) {
-        configPath = path.join(__dirname, argv.config);
-    }
+    if (argv.c) configPath = argv.c;
+    if (argv.config) configPath = argv.config;
+    if(!path.isAbsolute(configPath)) configPath = path.join(__dirname, configPath)
 }
 
 try{
@@ -31,7 +30,6 @@ try{
 var zones = config.zones;
 var express = require('express');
 var logger = require('morgan');
-var path = require('path');
 var app = express();
 var http = require('http');
 var airtunes = require('airtunes')
@@ -134,6 +132,7 @@ server.on('clientDisconnected', (data) => {
                 for (var i in zones) {
                     zones[i].enabled = false;
                 }
+                fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
             });
         }, config.idletimout * 1000);
     }
@@ -198,6 +197,7 @@ app.get('/startzone/:zonename', function (req, res) {
             resp = zones[i];
         }
     }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     res.json(resp);
 });
 
@@ -213,6 +213,7 @@ app.get('/stopzone/:zonename', function (req, res) {
             resp = zones[i];
         }
     }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     res.json(resp);
 });
 
