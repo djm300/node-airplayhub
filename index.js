@@ -309,6 +309,7 @@ function getIPAddress(service) {
 			break;
 		}
 	}
+};
 
 function validateDevice(service) {
 
