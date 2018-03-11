@@ -1,3 +1,7 @@
+## RUN WITH docker run -p 8089:8089 -p5000:5000 --net=host --restart=always -it airplayhub1
+
+
+
 FROM debian:stretch
 
 # RUN is only executed during build phase for setting filesystem thingies
@@ -9,7 +13,7 @@ RUN apt-get install -y nodejs
 
 RUN apt-get install -y build-essential git libavahi-compat-libdnssd-dev
 
-RUN mkdir /airplayhub  && cd /airplayhub && git clone https://github.com/noelhibbard/node-airplayhub.git . && npm i . && npm i .
+RUN mkdir /airplayhub  && cd /airplayhub && git clone https://github.com/djm300/node-airplayhub.git . && npm i . && npm i .
 
 # Docker will always run a single command, not more. So at the end of your Dockerfile, you can specify one command to run. Not more.
 ADD ./start.sh /airplayhub
