@@ -235,7 +235,8 @@ server.on('volumeChange', (data) => {
     config.mastervolume = data;		// -30 to 0dB, or -144 for mute
     for (var i in zones) {
         if (zones[i].enabled) {
-	    connectedDevices[i].setVolume(compositeVolume(zones[i].volume));
+        connectedDevices[i].setVolume(compositeVolume(zones[i].volume));
+        log.info("Set volume for zone "+zones[i].name+ "to " + compositeVolume(zones[i].volume) );
 	}
     }
     clearTimeout(idleTimer);
