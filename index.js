@@ -127,6 +127,21 @@ mqtt.on('message', (topic, message) => {
 
     let obj;
 
+
+/*
+MQTT topics:
+
+airplayhub/set/Keuken/volume - message 10
+airplayhub/set/Keuken/enable - message true or empty
+airplayhub/set/Keuken/disable
+
+airplayhub/get/Keuken/volume or airplayhub/set/Keuken/volume without message
+
+For setting the composite volume:
+airplayhub/get/GLOBAL/volume or airplayhub/set/GLOBAL/volume without message
+airplayhub/set/GLOBAL/volume 
+
+*/
     switch (command) {
         case 'enable':
             if (message === 'false' || message === '0') {
@@ -164,10 +179,27 @@ mqtt.on('message', (topic, message) => {
         case 'getvolume':
             _getVolume(speaker)
             break;
-        default:
+        case 'setcompositevolume':
+            _setCompositeVolume(volume)
+            break;
+        case 'getcompositevolume':
+            _getCompositeVolume()
+        break;
+         default:
     }
 });
 
+function _getVolume(speaker) {
+    mqttPub("config.mqttTopic"+"/status","0",{})
+}
+
+function _setCompositeVolume(volume) {
+    mqttPub("config.mqttTopic"+"/status","0",{})
+}
+
+function _getCompositeVolume() {
+    mqttPub("config.mqttTopic"+"/status","0",{})
+}
 
 // debug logging on the airtunes streamer pipeline
 airtunes.on('buffer', status => {
