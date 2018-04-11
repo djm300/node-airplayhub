@@ -10,7 +10,8 @@ const airtunes = require('airtunes')
 const airtunesserver = require('nodetunes');
 const bonjour = require('bonjour')();
 var argv = require('minimist')(process.argv.slice(2));
-
+var app = express();
+var http = require('http');
 
 
 // Set configuration file template
@@ -47,36 +48,41 @@ try{
 } catch(e) {
     fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
 }
+
+// define internal variables for speakers
 var zones = config.zones;
-
-
-var app = express();
-var http = require('http');
-
 var connectedDevices = [];
 var trackinfo = {};
 var idleTimer;
 
-var server = new airtunesserver({ serverName: config.servername, verbose: config.debug });
+// start device which can stream to other airplay speakers
+var server = new airtunesserver({ serverName: config.servername, verbose: false });
 
+// if someone connects to the airplay hub, stream in into the airtunes sink
 server.on('clientConnected', function (stream) {
+    log.info("New connection on airplayhub");
     clearTimeout(idleTimer);
     stream.pipe(airtunes);
     for (var i in zones) {
         if (zones[i].enabled) {
-            connectedDevices[i] = airtunes.add(zones[i].host, { port: zones[i].port,
+		log.info("Starting to stream to enabled zone "+zones[i].name);
+		connectedDevices[i] = airtunes.add(zones[i].host, { port: zones[i].port,
 								volume: compositeVolume(zones[i].volume)});
         }
     }
 });
 
+// if someone disconnects to the airplay hub
 server.on('clientDisconnected', (data) => {
     clearTimeout(idleTimer);
+    log.info("Client disconnected from airplayhub");
     if (config.idletimout > 0) {
         idleTimer = setTimeout(() => {
             airtunes.stopAll(() => {
+		log.info("Stopping stream to all zones");
                 for (var i in zones) {
                     zones[i].enabled = false;
+		    log.info("Disabled zone "+zones[i].name);
                 }
                 fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
             });
@@ -85,6 +91,7 @@ server.on('clientDisconnected', (data) => {
 });
 
 server.on('metadataChange', (data) => {
+    log.info("Metadata changed");
     trackinfo = data;
     getArtwork(trackinfo.asar, trackinfo.asal, (url) => {
         if (url) {
@@ -97,11 +104,15 @@ server.on('metadataChange', (data) => {
 
 
 function compositeVolume(vol) {
+    log.debug("Calculating compositeVolume for vol "+vol);
+    log.debug("Setting volume to "+Math.round(vol*(config.mastervolume+30)/30.));
     return(config.mastervolume == -144 ? 0:
 	   Math.round(vol*(config.mastervolume+30)/30.));
+
 }
     
 server.on('volumeChange', (data) => {
+	log.info("Volume change requested");
     config.mastervolume = data;		// -30 to 0dB, or -144 for mute
     for (var i in zones) {
         if (zones[i].enabled) {
@@ -114,8 +125,6 @@ server.on('volumeChange', (data) => {
 
 server.start();
 
-if (config.debug) { app.use(logger('dev')) };
-
 app.use('/icons', express.static(path.join(__dirname, 'root/icons'), { maxAge: '1y' }));
 app.use(express.static(path.join(__dirname, 'root'), {
     setHeaders: (res, path, stat) => {
@@ -126,10 +135,16 @@ app.use(express.static(path.join(__dirname, 'root'), {
 http.createServer(app).listen(config.webuiport);
 
 app.get('/', (req, res) => { res.redirect('/Index.html') });
+log.debug("Web page requested");
+
 
 app.get('/startzone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
     var resp = { error: "zone not found" };
+
+    log.debug("Zone start requested for "+zonename);
+	
+	
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             connectedDevices[i] = airtunes.add(zones[i].host, { port: zones[i].port,
@@ -145,6 +160,9 @@ app.get('/startzone/:zonename', function (req, res) {
 app.get('/stopzone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
     var resp = { error: "zone not found" };
+	
+    log.debug("Zone stop requested for "+zonename);
+	
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             zones[i].enabled = false;
@@ -161,6 +179,9 @@ app.get('/stopzone/:zonename', function (req, res) {
 app.get('/setvol/:zonename/:volume', function (req, res) {
     var zonename = req.params.zonename;
     var volume = req.params.volume;
+	
+    log.debug("Volume change requested for "+zonename);
+	
     var resp = { error: "zone not found" };
     for (var i in zones) {
             if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
@@ -177,6 +198,8 @@ app.get('/setvol/:zonename/:volume', function (req, res) {
 });
 
 app.get('/zones', function (req, res) {
+     log.debug("Zone list requested");
+	
     var zonesNotHidden = zones.filter(function (z) {
         return (!z.hidden);
     });
@@ -186,6 +209,9 @@ app.get('/zones', function (req, res) {
 app.get('/hidezone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
     var resp = { error: "zone not found" };
+	
+    log.debug("Zone hide requested for "+zonename);
+	
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             zones[i].hidden = true;
@@ -199,6 +225,9 @@ app.get('/hidezone/:zonename', function (req, res) {
 app.get('/showzone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
     var resp = { error: "zone not found" };
+	
+    log.debug("Zone show requested for "+zonename);
+	
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             zones[i].hidden = false;
@@ -210,7 +239,8 @@ app.get('/showzone/:zonename', function (req, res) {
 });
 
 app.get('/trackinfo', function (req, res) {
-    res.json(trackinfo);
+    log.debug("Trackinfo requested");
+	res.json(trackinfo);
 });
 
 function getArtwork(artist, album, callback) {
