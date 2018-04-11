@@ -256,6 +256,23 @@ app.get('/', (req, res) => { res.redirect('/Index.html') });
 log.debug("Web page requested");
 
 
+
+
+// START A ZONE
+function _startZone(zonename, resp) {
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+            connectedDevices[i] = airtunes.add(zones[i].host, {
+            port: zones[i].port,
+                volume: compositeVolume(zones[i].volume)
+            });
+            zones[i].enabled = true;
+            resp = zones[i];
+        }
+    }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+    return resp;
+}
 app.get('/startzone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
     var resp = { error: "zone not found" };
@@ -267,6 +284,25 @@ app.get('/startzone/:zonename', function (req, res) {
     res.json(resp);
 });
 
+
+
+
+
+
+// STOP A ZONE
+function _stopZone(zonename, resp) {
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+            zones[i].enabled = false;
+            if (connectedDevices[i]) {
+                connectedDevices[i].stop();
+            }
+            resp = zones[i];
+        }
+    }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+    return resp;
+}
 app.get('/stopzone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
     var resp = { error: "zone not found" };
@@ -276,6 +312,24 @@ app.get('/stopzone/:zonename', function (req, res) {
     resp = _stopZone(zonename, resp);
     res.json(resp);
 });
+
+
+// Set volume (with composite volume)
+function _setVolume(zonename, volume, resp) {
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+            zones[i].volume = volume;
+            if (connectedDevices[i]) {
+                connectedDevices[i].setVolume(compositeVolume(volume));
+            }
+            resp = zones[i];
+        }
+    }
+    config.zones = zones;
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+    return resp;
+}
+
 
 app.get('/setvol/:zonename/:volume', function (req, res) {
     var zonename = req.params.zonename;
@@ -297,6 +351,17 @@ app.get('/zones', function (req, res) {
     res.json(zonesNotHidden);
 });
 
+// HIDE A ZONE
+function _hideZone(zonename, resp) {
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+            zones[i].hidden = true;
+            resp = zones[i];
+        }
+    }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+    return resp;
+}
 app.get('/hidezone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
     var resp = { error: "zone not found" };
@@ -307,6 +372,19 @@ app.get('/hidezone/:zonename', function (req, res) {
     res.json(resp);
 });
 
+
+
+// SHOW A ZONE
+function _showZone(zonename, resp) {
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+            zones[i].hidden = false;
+            resp = zones[i];
+        }
+    }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+    return resp;
+}
 app.get('/showzone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
     var resp = { error: "zone not found" };
@@ -322,72 +400,7 @@ app.get('/trackinfo', function (req, res) {
 	res.json(trackinfo);
 });
 
-function _stopZone(zonename, resp) {
-    for (var i in zones) {
-        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
-            zones[i].enabled = false;
-            if (connectedDevices[i]) {
-                connectedDevices[i].stop();
-            }
-            resp = zones[i];
-        }
-    }
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
-    return resp;
-}
 
-function _showZone(zonename, resp) {
-    for (var i in zones) {
-        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
-            zones[i].hidden = false;
-            resp = zones[i];
-        }
-    }
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
-    return resp;
-}
-
-function _hideZone(zonename, resp) {
-    for (var i in zones) {
-        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
-            zones[i].hidden = true;
-            resp = zones[i];
-        }
-    }
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
-    return resp;
-}
-
-function _setVolume(zonename, volume, resp) {
-    for (var i in zones) {
-        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
-            zones[i].volume = volume;
-            if (connectedDevices[i]) {
-                connectedDevices[i].setVolume(compositeVolume(volume));
-            }
-            resp = zones[i];
-        }
-    }
-    config.zones = zones;
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
-
-    return resp;
-}
-
-function _startZone(zonename, resp) {
-    for (var i in zones) {
-        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
-            connectedDevices[i] = airtunes.add(zones[i].host, {
-            port: zones[i].port,
-                volume: compositeVolume(zones[i].volume)
-            });
-            zones[i].enabled = true;
-            resp = zones[i];
-        }
-    }
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
-    return resp;
-}
 
 function getArtwork(artist, album, callback) {
     var url = `http://itunes.apple.com/search?term=${artist} ${album}`;
