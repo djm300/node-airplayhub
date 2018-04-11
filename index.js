@@ -117,7 +117,7 @@ mqtt.on('message', (topic, message) => {
 
     var zoneUnknown = true;
     for (var i in zones) {
-        if (zones[i].name.toLowerCase() == speaker.toLowerCase()) {
+        if (zones[i].name.toLowerCase() == speaker.toLowerCase() && speaker.toLowerCase() !== "GLOBAL".toLowerCase()) {
             zoneUnknown = false;
         }
     }
@@ -125,6 +125,10 @@ mqtt.on('message', (topic, message) => {
     if (zoneUnknown) {
         log.info('unknown speaker ', speaker);
         return;
+    }
+
+    if ( speaker.toLowerCase() !== "GLOBAL".toLowerCase() ) {
+        log.info('Request for global volume - ignoring speaker name', speaker);
     }
 
     let obj;
@@ -295,7 +299,7 @@ server.on('volumeChange', (data) => {
     for (var i in zones) {
         if (zones[i].enabled) {
             connectedDevices[i].setVolume(compositeVolume(zones[i].volume));
-            log.info("Set volume for zone " + zones[i].name + "to " + compositeVolume(zones[i].volume));
+            log.info("Set volume for zone " + zones[i].name + " to " + compositeVolume(zones[i].volume));
         }
     }
     clearTimeout(idleTimer);
