@@ -20,14 +20,16 @@ var config = {
     "webuiport": 8089,
     "verbosity": "debug",
     "idletimout": 600,
-    "mastervolume":-15,
+    "mastervolume": -15,
     "zones": [],
     "mqtt": true,
     "mqttUrl": "mqtt://mXXX.cloudmqtt.com:11111",
     "mqttTopic": "airplayhub",
 
-    "mqttOptions": { "host":"mXX.cloudmqtt.com" , "port":11111 ,"username": "USER", "password": "PASS",  
-        "clientId": "airplayhub",  "retain": false }
+    "mqttOptions": {
+        "host": "mXX.cloudmqtt.com", "port": 11111, "username": "USER", "password": "PASS",
+        "clientId": "airplayhub", "retain": false
+    }
 };
 var configPath = './config.json';
 
@@ -43,15 +45,15 @@ if (argv.h || argv.help) {
 } else {
     if (argv.c) configPath = argv.c;
     if (argv.config) configPath = argv.config;
-    if(!path.isAbsolute(configPath)) configPath = path.join(__dirname, configPath)
+    if (!path.isAbsolute(configPath)) configPath = path.join(__dirname, configPath)
 }
 
 // Try to read the config file. It it doesn't exist, create one.
-try{
+try {
     config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    log.debug('Configuration applied: \n'+  JSON.stringify(config, null, 2)  );
+    log.debug('Configuration applied: \n' + JSON.stringify(config, null, 2));
 
-} catch(e) {
+} catch (e) {
     log.debug('Configuration could not be found, writing new one');
     fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
 }
@@ -75,17 +77,17 @@ function mqttPub(topic, payload, options) {
 
 log.debug("MQTT Options from config: ", config.mqttOptions);
 
-var mqttOpts = Object.assign(config.mqttOptions ,   { will: {topic: config.name + '/connected', payload: '0', retain: true}});
+var mqttOpts = Object.assign(config.mqttOptions, { will: { topic: config.name + '/connected', payload: '0', retain: true } });
 log.debug("MQTT URL: ", config.mqttUrl);
 log.debug("MQTT Options: ", mqttOpts);
-const mqtt = Mqtt.connect(config.mqttUrl,  mqttOpts );
+const mqtt = Mqtt.connect(config.mqttUrl, mqttOpts);
 
 
 
 mqtt.on('connect', () => {
     log.info('mqtt connected', config.mqttUrl);
 
-    mqttPub(config.mqttTopic + '/connected',  '1', {retain: true});
+    mqttPub(config.mqttTopic + '/connected', '1', { retain: true });
 
     const topic = config.mqttTopic + '/set/#';
     log.info('mqtt subscribe ' + topic);
@@ -111,7 +113,7 @@ mqtt.on('reconnect', () => {
 mqtt.on('message', (topic, message) => {
     message = message.toString();
     log.debug('mqtt < ', topic, message);
-    const [, , speaker, command] = topic.split('/');
+    const [, getset, speaker, command] = topic.split('/');
 
     var zoneUnknown = true;
     for (var i in zones) {
@@ -128,20 +130,30 @@ mqtt.on('message', (topic, message) => {
     let obj;
 
 
-/*
-MQTT topics:
+    /*
+    MQTT topics:
+    
+    airplayhub/set/Keuken/volume - message 10
+    -- Must contain message of format int
+    airplayhub/set/Keuken/enable - message true or empty
+    -- May have no message or message 'true' or message with random value. If message is false, this will be seen as speaker disable request.
 
-airplayhub/set/Keuken/volume - message 10
-airplayhub/set/Keuken/enable - message true or empty
-airplayhub/set/Keuken/disable
+    airplayhub/set/Keuken/disable
+    -- Regardless of message content, will be considered as disable request.
 
-airplayhub/get/Keuken/volume or airplayhub/set/Keuken/volume without message
+    airplayhub/get/Keuken/volume or airplayhub/set/Keuken/volume without message
+    -- get message: payload ignored, will always return volume
+    -- set message: payload required and needs to be int.
+    -- in both cases, result will be sent via airplayhub/status/Keuken/volume with an int payload
 
-For setting the composite volume:
-airplayhub/get/GLOBAL/volume or airplayhub/set/GLOBAL/volume without message
-airplayhub/set/GLOBAL/volume 
-
-*/
+    For setting the composite volume:
+    airplayhub/get/GLOBAL/volume or airplayhub/set/GLOBAL/volume without message
+    airplayhub/set/GLOBAL/volume 
+    -- get message: payload ignored, will always return global volume
+    -- set message: payload required and needs to be int.
+    -- in both cases, result will be sent via airplayhub/status/GLOBAL/volume with an int payload
+    
+    */
     switch (command) {
         case 'enable':
             if (message === 'false' || message === '0') {
@@ -165,40 +177,53 @@ airplayhub/set/GLOBAL/volume
             _stopZone(speaker);
             break;
         case 'volume':
-            if (isNaN(message)) {
-                try {
-                    obj = JSON.parse(message);
-                    _setVolume(speaker, obj.val);
-                } catch (err) {
-
+            // Handle a request for the compositevolume (aka global volume)
+            if (speaker.toLowerCase=="GLOBAL".toLowerCase()) {
+                log.debug("MQTT message received for global volume");
+                if (getset=="get") {
+                    log.debug("MQTT requesting status of global volume");
                 }
-            } else {
-                _setVolume(speaker, parseInt(message, 10));
+                else if (getset=="set") {
+                    log.debug("MQTT requesting SETTING of global volume");
+                }
+            }
+
+            // So not a global request
+            if (getset == "get") {
+                _getVolume(speaker);
+                log.debug("MQTT requesting status of speaker volume");
+ 
+            }
+            else {
+                log.debug("MQTT requesting SETTING of speaker volume");
+                if (isNaN(message)) {
+                    try {
+                        obj = JSON.parse(message);
+                        _setVolume(speaker, obj.val);
+                    } catch (err) {
+
+                    }
+                }
+                else {
+                    _setVolume(speaker, parseInt(message, 10));
+                }
+                break;
             }
             break;
-        case 'getvolume':
-            _getVolume(speaker)
-            break;
-        case 'setcompositevolume':
-            _setCompositeVolume(volume)
-            break;
-        case 'getcompositevolume':
-            _getCompositeVolume()
-        break;
-         default:
+        default:
     }
 });
 
 function _getVolume(speaker) {
-    mqttPub("config.mqttTopic"+"/status","0",{})
+    mqttPub("config.mqttTopic" + "/status", "0", {})
 }
 
 function _setCompositeVolume(volume) {
-    mqttPub("config.mqttTopic"+"/status","0",{})
+    mqttPub("config.mqttTopic" + "/status", "0", {})
 }
 
 function _getCompositeVolume() {
-    mqttPub("config.mqttTopic"+"/status","0",{})
+    mqttPub("config.mqttTopic" + "/status", "0", {})
 }
 
 // debug logging on the airtunes streamer pipeline
@@ -215,9 +240,11 @@ server.on('clientConnected', function (stream) {
     stream.pipe(airtunes);
     for (var i in zones) {
         if (zones[i].enabled) {
-		log.info("Starting to stream to enabled zone "+zones[i].name);
-		connectedDevices[i] = airtunes.add(zones[i].host, { port: zones[i].port,
-								volume: compositeVolume(zones[i].volume)});
+            log.info("Starting to stream to enabled zone " + zones[i].name);
+            connectedDevices[i] = airtunes.add(zones[i].host, {
+                port: zones[i].port,
+                volume: compositeVolume(zones[i].volume)
+            });
         }
     }
 });
@@ -229,10 +256,10 @@ server.on('clientDisconnected', (data) => {
     if (config.idletimout > 0) {
         idleTimer = setTimeout(() => {
             airtunes.stopAll(() => {
-		log.info("Stopping stream to all zones");
+                log.info("Stopping stream to all zones");
                 for (var i in zones) {
                     zones[i].enabled = false;
-		    log.info("Disabled zone "+zones[i].name);
+                    log.info("Disabled zone " + zones[i].name);
                 }
                 fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
             });
@@ -254,22 +281,22 @@ server.on('metadataChange', (data) => {
 
 
 function compositeVolume(vol) {
-    log.debug("Calculating compositeVolume for vol "+vol);
-//    log.debug("Setting volume to "+Math.round(vol*(config.mastervolume+30)/30.));
-    return(config.mastervolume == -144 ? 0:
-	   Math.round(vol*(config.mastervolume+30)/30.));
+    log.debug("Calculating compositeVolume for vol " + vol);
+    //    log.debug("Setting volume to "+Math.round(vol*(config.mastervolume+30)/30.));
+    return (config.mastervolume == -144 ? 0 :
+        Math.round(vol * (config.mastervolume + 30) / 30.));
 
 }
-    
+
 // This is a master change volume coming from the audio source, e.g. your iphone with Spotify. This will take that volume and translate that to a new volume level for every active speaker.
 server.on('volumeChange', (data) => {
-    log.info("Volume change requested: request master volume "+data);
+    log.info("Volume change requested: request master volume " + data);
     config.mastervolume = data;		// -30 to 0dB, or -144 for mute
     for (var i in zones) {
         if (zones[i].enabled) {
-        connectedDevices[i].setVolume(compositeVolume(zones[i].volume));
-        log.info("Set volume for zone "+zones[i].name+ "to " + compositeVolume(zones[i].volume) );
-	}
+            connectedDevices[i].setVolume(compositeVolume(zones[i].volume));
+            log.info("Set volume for zone " + zones[i].name + "to " + compositeVolume(zones[i].volume));
+        }
     }
     clearTimeout(idleTimer);
 });
@@ -297,7 +324,7 @@ function _startZone(zonename) {
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             connectedDevices[i] = airtunes.add(zones[i].host, {
-            port: zones[i].port,
+                port: zones[i].port,
                 volume: compositeVolume(zones[i].volume)
             });
             zones[i].enabled = true;
@@ -311,9 +338,9 @@ app.get('/startzone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
     var resp = { error: "zone not found" };
 
-    log.debug("Zone start requested for "+zonename);
-	
-	
+    log.debug("Zone start requested for " + zonename);
+
+
     resp = _startZone(zonename);
     res.json(resp);
 });
@@ -340,9 +367,9 @@ function _stopZone(zonename) {
 app.get('/stopzone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
     var resp = { error: "zone not found" };
-	
-    log.debug("Zone stop requested for "+zonename);
-	
+
+    log.debug("Zone stop requested for " + zonename);
+
     resp = _stopZone(zonename);
     res.json(resp);
 });
@@ -371,9 +398,9 @@ function _setVolume(zonename, volume) {
 app.get('/setvol/:zonename/:volume', function (req, res) {
     var zonename = req.params.zonename;
     var volume = req.params.volume;
-	
-    log.debug("Volume change requested for "+zonename);
-	
+
+    log.debug("Volume change requested for " + zonename);
+
     var resp = { error: "zone not found" };
     resp = _setVolume(zonename, volume);
     res.json(resp);
@@ -383,8 +410,8 @@ app.get('/setvol/:zonename/:volume', function (req, res) {
 
 // GET ZONES INFORMATION FOR WEB APP
 app.get('/zones', function (req, res) {
-     log.debug("Zone list requested");
-	
+    log.debug("Zone list requested");
+
     var zonesNotHidden = zones.filter(function (z) {
         return (!z.hidden);
     });
@@ -412,9 +439,9 @@ function _hideZone(zonename) {
 app.get('/hidezone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
     var resp = { error: "zone not found" };
-	
-    log.debug("Zone hide requested for "+zonename);
-	
+
+    log.debug("Zone hide requested for " + zonename);
+
     resp = _hideZone(zonename);
     res.json(resp);
 });
@@ -435,16 +462,16 @@ function _showZone(zonename) {
 app.get('/showzone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
     var resp = { error: "zone not found" };
-	
-    log.debug("Zone show requested for "+zonename);
-	
+
+    log.debug("Zone show requested for " + zonename);
+
     resp = _showZone(zonename);
     res.json(resp);
 });
 
 app.get('/trackinfo', function (req, res) {
     log.debug("Trackinfo requested");
-	res.json(trackinfo);
+    res.json(trackinfo);
 });
 
 
@@ -499,7 +526,7 @@ function validateDevice(service) {
     service.name = service.name.split('@')[1];
 
     // Ignore self
-    if(service.name == config.servername) return;
+    if (service.name == config.servername) return;
 
     // Check whether we know this zone already - if we do, do not add it again
     var zoneUnknown = true;
@@ -507,23 +534,23 @@ function validateDevice(service) {
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == service.name.toLowerCase()) {
             // Duplicate found which already existed in the config. Mind we match on the fqdn the host claims to have.
-	    if(service.ip != zones[i].host) {
-		zones[i].host = service.ip;
-		zoneChanged = true;
-	    }
-	    if(service.port != zones[i].port) {
-		zones[i].port = service.port;
-		zoneChanged = true;
-	    }
+            if (service.ip != zones[i].host) {
+                zones[i].host = service.ip;
+                zoneChanged = true;
+            }
+            if (service.port != zones[i].port) {
+                zones[i].port = service.port;
+                zoneChanged = true;
+            }
             zoneUnknown = false;
-	}
+        }
     }
 
     // If it is a new zone, thank you very much, add it and write it to our config
     // TODO: I re-used the ./config.json used elsewhere in this application. Ideally, it should take the parameter passed in --config and not just 'require' the file but properly read it and parse it and write it back here
     if (zoneUnknown) {
         zones.push({ "name": service.name, "host": service.ip, "port": service.port, "volume": 0, "enabled": false, "hidden": false });
-        log.info('New zone added: '+service.name);
+        log.info('New zone added: ' + service.name);
     }
     if (zoneUnknown || zoneChanged) {
         config.zones = zones;
@@ -535,7 +562,7 @@ function validateDevice(service) {
 
 process.on('SIGTERM', function () {
     log.debug("Exiting...");
-    log.debug("Writing config to "+configPath);
+    log.debug("Writing config to " + configPath);
     fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     process.exit(1);
 });
@@ -547,13 +574,13 @@ var browser = bonjour.find({
 });
 
 browser.on('up', function (service) {
-    log.debug("New device detected: "+ JSON.stringify(service),null,4);
+    log.debug("New device detected: " + JSON.stringify(service), null, 4);
     validateDevice(service);
 });
 
 browser.on('down', function (service) {
     // TODO
-    log.debug("Device is down: "+ JSON.stringify(service),null,4);
+    log.debug("Device is down: " + JSON.stringify(service), null, 4);
 
 });
 
