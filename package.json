@@ -1,17 +1,18 @@
 {
   "author": {
-    "name": "Noel Hibbard"
+    "name": "Noel Hibbard, djm300"
   },
   "bin": {
     "node-airplayhub": "./index.js"
   },
   "dependencies": {
     "airtunes": "git+https://github.com/marcokeur/node_airtunes.git",
+    "bonjour": "*",
     "express": "^4.14.0",
     "minimist": "^1.2.0",
-    "morgan": "^1.7.0",
+    "mqtt": "^2.17.0",
     "nodetunes": "git+https://github.com/Kolky/nodetunes.git",
-    "bonjour": "*"
+    "yalm": "^4.1.0"
   },
   "description": "./README.md",
   "devDependencies": {},
@@ -23,5 +24,5 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
