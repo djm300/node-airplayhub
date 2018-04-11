@@ -4,7 +4,7 @@
 var path = require('path');
 var fs = require('fs')
 const express = require('express');
-const mqtt = require('mqtt');
+const Mqtt = require('mqtt');
 const log = require('yalm');
 const airtunes = require('airtunes')
 const airtunesserver = require('nodetunes');
@@ -21,7 +21,10 @@ var config = {
     "verbosity": "debug",
     "idletimout": 600,
     "mastervolume":-15,
-    "zones": []
+    "zones": [],
+    "mqtt": true,
+    "mqttUrl": "mqtt://mXXX.cloudmqtt.com",
+    "mqttOptions": "{ 'username': 'USER', 'password':'PASS', 'clientId':'airplayhub', 'retain':false, 'protocol':'MQTT', 'protocolVersion': '3.1', 'rejectUnauthorized': false }"
 };
 var configPath = './config.json';
 
@@ -57,6 +60,108 @@ var idleTimer;
 
 // start device which can stream to other airplay speakers
 var server = new airtunesserver({ serverName: config.servername, verbose: false });
+
+
+// setup mqtt
+const mqtt = Mqtt.connect(config.mqttUrl, {will: {topic: config.name + '/connected', payload: '0', retain: true}});
+
+function mqttPub(topic, payload, options) {
+    log.debug('mqtt >', topic, payload);
+    mqtt.publish(topic, payload, options);
+}
+
+mqtt.on('connect', () => {
+    log.info('mqtt connected', config.mqttUrl);
+
+    mqttPub(config.name + '/connected', connected ? '2' : '1', {retain: true});
+
+    const topic = config.name + '/set/#';
+    log.info('mqtt subscribe ' + topic);
+    mqtt.subscribe(topic);
+});
+
+mqtt.on('close', () => {
+    log.info('mqtt closed ' + config.mqttUrl);
+});
+
+mqtt.on('error', err => {
+    log.error('mqtt', err.toString());
+});
+
+mqtt.on('offline', () => {
+    log.error('mqtt offline');
+});
+
+mqtt.on('reconnect', () => {
+    log.info('mqtt reconnect');
+});
+
+mqtt.on('message', (topic, message) => {
+    message = message.toString();
+    log.debug('mqtt < ', topic, message);
+    const [, , speaker, command] = topic.split('/');
+
+    var zoneUnknown = true;
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == speaker.toLowerCase()) {
+            zoneUnknown = false;
+        }
+    }
+
+    if (zoneUnknown) {
+        log.info('unknown speaker ', speaker);
+        return;
+    }
+
+    let obj;
+
+    switch (command) {
+        case 'enable':
+            if (message === 'false' || message === '0') {
+                _stopSpeaker(speaker);
+            } else if (message === 'true' || parseInt(message, 10) > 0) {
+                _addSpeaker(speaker);
+            } else {
+                try {
+                    obj = JSON.parse(message);
+                    if (obj.val) {
+                        _addSpeaker(speaker);
+                    } else {
+                        _stopSpeaker(speaker);
+                    }
+                } catch (err) {
+                    _addSpeaker(speaker);
+                }
+            }
+            break;
+        case 'disable':
+            _stopSpeaker(speaker);
+            break;
+        case 'volume':
+            if (isNaN(message)) {
+                try {
+                    obj = JSON.parse(message);
+                    _setVolume(speaker, obj.val);
+                } catch (err) {
+
+                }
+            } else {
+                _setVolume(speaker, parseInt(message, 10));
+            }
+            break;
+        case 'getvolume':
+            _getVolume(speaker)
+            break;
+        default:
+    }
+});
+
+// debug logging on the airtunes streamer pipeline
+airtunes.on('buffer', status => {
+    log.debug('buffer', status);
+});
+
+
 
 // if someone connects to the airplay hub, stream in into the airtunes sink
 server.on('clientConnected', function (stream) {
@@ -112,7 +217,7 @@ function compositeVolume(vol) {
 }
     
 server.on('volumeChange', (data) => {
-	log.info("Volume change requested");
+    log.info("Volume change requested");
     config.mastervolume = data;		// -30 to 0dB, or -144 for mute
     for (var i in zones) {
         if (zones[i].enabled) {
@@ -316,11 +421,15 @@ function validateDevice(service) {
     }
     if (zoneUnknown || zoneChanged) {
         config.zones = zones;
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+        log.debug('Synced running config to config file');
     }
 
 };
 
 process.on('SIGTERM', function () {
+    log.debug("Exiting...");
+    log.debug("Writing config to "+configPath);
     fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     process.exit(1);
 });
