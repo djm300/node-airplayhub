@@ -263,15 +263,7 @@ app.get('/startzone/:zonename', function (req, res) {
     log.debug("Zone start requested for "+zonename);
 	
 	
-    for (var i in zones) {
-        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
-            connectedDevices[i] = airtunes.add(zones[i].host, { port: zones[i].port,
-								volume: compositeVolume(zones[i].volume) });
-            zones[i].enabled = true;
-            resp = zones[i];
-        }
-    }
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+    resp = _startZone(zonename, resp);
     res.json(resp);
 });
 
@@ -360,6 +352,21 @@ app.get('/trackinfo', function (req, res) {
     log.debug("Trackinfo requested");
 	res.json(trackinfo);
 });
+
+function _startZone(zonename, resp) {
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+            connectedDevices[i] = airtunes.add(zones[i].host, {
+            port: zones[i].port,
+                volume: compositeVolume(zones[i].volume)
+            });
+            zones[i].enabled = true;
+            resp = zones[i];
+        }
+    }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+    return resp;
+}
 
 function getArtwork(artist, album, callback) {
     var url = `http://itunes.apple.com/search?term=${artist} ${album}`;
