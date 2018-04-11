@@ -223,7 +223,7 @@ server.on('metadataChange', (data) => {
 
 function compositeVolume(vol) {
     log.debug("Calculating compositeVolume for vol "+vol);
-    log.debug("Setting volume to "+Math.round(vol*(config.mastervolume+30)/30.));
+//    log.debug("Setting volume to "+Math.round(vol*(config.mastervolume+30)/30.));
     return(config.mastervolume == -144 ? 0:
 	   Math.round(vol*(config.mastervolume+30)/30.));
 
