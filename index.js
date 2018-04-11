@@ -130,24 +130,24 @@ mqtt.on('message', (topic, message) => {
     switch (command) {
         case 'enable':
             if (message === 'false' || message === '0') {
-                _stopSpeaker(speaker);
+                _stopZone(speaker);
             } else if (message === 'true' || parseInt(message, 10) > 0) {
-                _addSpeaker(speaker);
+                _startZone(speaker);
             } else {
                 try {
                     obj = JSON.parse(message);
                     if (obj.val) {
-                        _addSpeaker(speaker);
+                        _startZone(speaker);
                     } else {
-                        _stopSpeaker(speaker);
+                        _stopZone(speaker);
                     }
                 } catch (err) {
-                    _addSpeaker(speaker);
+                    _startZone(speaker);
                 }
             }
             break;
         case 'disable':
-            _stopSpeaker(speaker);
+            _stopZone(speaker);
             break;
         case 'volume':
             if (isNaN(message)) {
@@ -241,7 +241,6 @@ server.on('volumeChange', (data) => {
     clearTimeout(idleTimer);
 });
 
-
 server.start();
 
 app.use('/icons', express.static(path.join(__dirname, 'root/icons'), { maxAge: '1y' }));
@@ -251,6 +250,7 @@ app.use(express.static(path.join(__dirname, 'root'), {
     }
 }));
 
+// START WEBSERVER
 http.createServer(app).listen(config.webuiport);
 
 app.get('/', (req, res) => { res.redirect('/Index.html') });
@@ -260,7 +260,7 @@ log.debug("Web page requested");
 
 
 // START A ZONE
-function _startZone(zonename, resp) {
+function _startZone(zonename) {
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             connectedDevices[i] = airtunes.add(zones[i].host, {
@@ -281,7 +281,7 @@ app.get('/startzone/:zonename', function (req, res) {
     log.debug("Zone start requested for "+zonename);
 	
 	
-    resp = _startZone(zonename, resp);
+    resp = _startZone(zonename);
     res.json(resp);
 });
 
@@ -291,7 +291,7 @@ app.get('/startzone/:zonename', function (req, res) {
 
 
 // STOP A ZONE
-function _stopZone(zonename, resp) {
+function _stopZone(zonename) {
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             zones[i].enabled = false;
@@ -310,13 +310,18 @@ app.get('/stopzone/:zonename', function (req, res) {
 	
     log.debug("Zone stop requested for "+zonename);
 	
-    resp = _stopZone(zonename, resp);
+    resp = _stopZone(zonename);
     res.json(resp);
 });
 
 
-// Set volume (with composite volume)
-function _setVolume(zonename, volume, resp) {
+
+
+
+
+
+// SET VOLUME (with composite volume)
+function _setVolume(zonename, volume) {
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             zones[i].volume = volume;
@@ -330,8 +335,6 @@ function _setVolume(zonename, volume, resp) {
     fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     return resp;
 }
-
-
 app.get('/setvol/:zonename/:volume', function (req, res) {
     var zonename = req.params.zonename;
     var volume = req.params.volume;
@@ -339,10 +342,13 @@ app.get('/setvol/:zonename/:volume', function (req, res) {
     log.debug("Volume change requested for "+zonename);
 	
     var resp = { error: "zone not found" };
-    resp = _setVolume(zonename, volume, resp);
+    resp = _setVolume(zonename, volume);
     res.json(resp);
 });
 
+
+
+// GET ZONES INFORMATION FOR WEB APP
 app.get('/zones', function (req, res) {
      log.debug("Zone list requested");
 	
@@ -352,8 +358,15 @@ app.get('/zones', function (req, res) {
     res.json(zonesNotHidden);
 });
 
+
+
+
+
+
+
+
 // HIDE A ZONE
-function _hideZone(zonename, resp) {
+function _hideZone(zonename) {
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             zones[i].hidden = true;
@@ -369,14 +382,14 @@ app.get('/hidezone/:zonename', function (req, res) {
 	
     log.debug("Zone hide requested for "+zonename);
 	
-    resp = _hideZone(zonename, resp);
+    resp = _hideZone(zonename);
     res.json(resp);
 });
 
 
 
 // SHOW A ZONE
-function _showZone(zonename, resp) {
+function _showZone(zonename) {
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             zones[i].hidden = false;
@@ -392,7 +405,7 @@ app.get('/showzone/:zonename', function (req, res) {
 	
     log.debug("Zone show requested for "+zonename);
 	
-    resp = _showZone(zonename, resp);
+    resp = _showZone(zonename);
     res.json(resp);
 });
 
@@ -402,7 +415,7 @@ app.get('/trackinfo', function (req, res) {
 });
 
 
-
+// ARTWORK FUNCTION
 function getArtwork(artist, album, callback) {
     var url = `http://itunes.apple.com/search?term=${artist} ${album}`;
 
@@ -426,6 +439,11 @@ function getArtwork(artist, album, callback) {
     });
 }
 
+
+
+
+
+// DISCOVERY FUNCTIONS FOR AIRPLAY DEVICES
 function getIPAddress(service) {
 
     addresses = service.addresses;
