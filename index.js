@@ -1,18 +1,35 @@
 #!/usr/bin/env node
 
+// Import depencies
 var path = require('path');
 var fs = require('fs')
+const express = require('express');
+const mqtt = require('mqtt');
+const log = require('yalm');
+const airtunes = require('airtunes')
+const airtunesserver = require('nodetunes');
+const bonjour = require('bonjour')();
+var argv = require('minimist')(process.argv.slice(2));
+
+
+
+// Set configuration file template
 var config = {
     "servername": "[AirPlay Hub]",
     "webuiport": 8089,
-    "debug": false,
+    "verbosity": "debug",
     "idletimout": 600,
     "mastervolume":-15,
     "zones": []
 };
 var configPath = './config.json';
 
-var argv = require('minimist')(process.argv.slice(2));
+// Set up logger
+log.setLevel(config.verbosity);
+
+log.info('Application starting');
+
+// Read command line argument and see if there is a config file available - else read ./config.json
 if (argv.h || argv.help) {
     console.log('usage: node-airplayhub [options]\n  options:\n    -c, --config     Path to config file')
     process.exit();
@@ -22,20 +39,20 @@ if (argv.h || argv.help) {
     if(!path.isAbsolute(configPath)) configPath = path.join(__dirname, configPath)
 }
 
+// Try to read the config file. It it doesn't exist, create one.
 try{
     config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    log.debug('Configuration applied: \n'+  JSON.stringify(config, null, 2)  );
+
 } catch(e) {
     fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
 }
-
 var zones = config.zones;
-var express = require('express');
-var logger = require('morgan');
+
+
 var app = express();
 var http = require('http');
-var airtunes = require('airtunes')
-var airtunesserver = require('nodetunes');
-var bonjour = require('bonjour')();
+
 var connectedDevices = [];
 var trackinfo = {};
 var idleTimer;
@@ -61,6 +78,7 @@ server.on('clientDisconnected', (data) => {
                 for (var i in zones) {
                     zones[i].enabled = false;
                 }
+                fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
             });
         }, config.idletimout * 1000);
     }
@@ -77,6 +95,7 @@ server.on('metadataChange', (data) => {
     });
 });
 
+
 function compositeVolume(vol) {
     return(config.mastervolume == -144 ? 0:
 	   Math.round(vol*(config.mastervolume+30)/30.));
@@ -91,6 +110,7 @@ server.on('volumeChange', (data) => {
     }
     clearTimeout(idleTimer);
 });
+
 
 server.start();
 
@@ -118,6 +138,7 @@ app.get('/startzone/:zonename', function (req, res) {
             resp = zones[i];
         }
     }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     res.json(resp);
 });
 
@@ -133,6 +154,7 @@ app.get('/stopzone/:zonename', function (req, res) {
             resp = zones[i];
         }
     }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     res.json(resp);
 });
 
@@ -141,15 +163,16 @@ app.get('/setvol/:zonename/:volume', function (req, res) {
     var volume = req.params.volume;
     var resp = { error: "zone not found" };
     for (var i in zones) {
-        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
-            zones[i].volume = volume;
-	    if (connectedDevices[i]) {
-		connectedDevices[i].setVolume(compositeVolume(volume));
-	    }
+            if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+                zones[i].volume = volume;
+            if (connectedDevices[i]) {
+                connectedDevices[i].setVolume(compositeVolume(volume));
+            }
             resp = zones[i];
         }
     }
     config.zones = zones;
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     res.json(resp);
 });
 
@@ -169,6 +192,7 @@ app.get('/hidezone/:zonename', function (req, res) {
             resp = zones[i];
         }
     }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     res.json(resp);
 });
 
@@ -181,6 +205,7 @@ app.get('/showzone/:zonename', function (req, res) {
             resp = zones[i];
         }
     }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     res.json(resp);
 });
 
@@ -257,10 +282,12 @@ function validateDevice(service) {
     // TODO: I re-used the ./config.json used elsewhere in this application. Ideally, it should take the parameter passed in --config and not just 'require' the file but properly read it and parse it and write it back here
     if (zoneUnknown) {
         zones.push({ "name": service.name, "host": service.ip, "port": service.port, "volume": 0, "enabled": false, "hidden": false });
+        log.info('New zone added: '+service.name);
     }
     if (zoneUnknown || zoneChanged) {
         config.zones = zones;
     }
+
 };
 
 process.on('SIGTERM', function () {
@@ -268,18 +295,21 @@ process.on('SIGTERM', function () {
     process.exit(1);
 });
 
+
 // browse for all raop services
 var browser = bonjour.find({
     type: 'raop'
 });
 
 browser.on('up', function (service) {
+    log.debug("New device detected: "+ JSON.stringify(service),null,4);
     validateDevice(service);
 });
 
 browser.on('down', function (service) {
     // TODO
+    log.debug("Device is down: "+ JSON.stringify(service),null,4);
+
 });
 
 browser.start();
-
