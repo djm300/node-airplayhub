@@ -23,8 +23,11 @@ var config = {
     "mastervolume":-15,
     "zones": [],
     "mqtt": true,
-    "mqttUrl": "mqtt://mXXX.cloudmqtt.com",
-    "mqttOptions": "{ 'username': 'USER', 'password':'PASS', 'clientId':'airplayhub', 'retain':false, 'protocol':'MQTT', 'protocolVersion': '3.1', 'rejectUnauthorized': false }"
+    "mqttUrl": "mqtt://mXXX.cloudmqtt.com:11111",
+    "mqttTopic": "airplayhub",
+
+    "mqttOptions": { "host":"mXX.cloudmqtt.com" , "port":11111 ,"username": "USER", "password": "PASS",  
+        "clientId": "airplayhub",  "retain": false }
 };
 var configPath = './config.json';
 
@@ -49,6 +52,7 @@ try{
     log.debug('Configuration applied: \n'+  JSON.stringify(config, null, 2)  );
 
 } catch(e) {
+    log.debug('Configuration could not be found, writing new one');
     fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
 }
 
@@ -61,21 +65,29 @@ var idleTimer;
 // start device which can stream to other airplay speakers
 var server = new airtunesserver({ serverName: config.servername, verbose: false });
 
-
 // setup mqtt
-const mqtt = Mqtt.connect(config.mqttUrl, {will: {topic: config.name + '/connected', payload: '0', retain: true}});
 
 function mqttPub(topic, payload, options) {
     log.debug('mqtt >', topic, payload);
     mqtt.publish(topic, payload, options);
 }
 
+
+log.debug("MQTT Options from config: ", config.mqttOptions);
+
+var mqttOpts = Object.assign(config.mqttOptions ,   { will: {topic: config.name + '/connected', payload: '0', retain: true}});
+log.debug("MQTT URL: ", config.mqttUrl);
+log.debug("MQTT Options: ", mqttOpts);
+const mqtt = Mqtt.connect(config.mqttUrl,  mqttOpts );
+
+
+
 mqtt.on('connect', () => {
     log.info('mqtt connected', config.mqttUrl);
 
-    mqttPub(config.name + '/connected', connected ? '2' : '1', {retain: true});
+    mqttPub(config.mqttTopic + '/connected',  '1', {retain: true});
 
-    const topic = config.name + '/set/#';
+    const topic = config.mqttTopic + '/set/#';
     log.info('mqtt subscribe ' + topic);
     mqtt.subscribe(topic);
 });
@@ -155,6 +167,7 @@ mqtt.on('message', (topic, message) => {
         default:
     }
 });
+
 
 // debug logging on the airtunes streamer pipeline
 airtunes.on('buffer', status => {
