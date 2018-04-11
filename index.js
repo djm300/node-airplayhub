@@ -231,7 +231,7 @@ function compositeVolume(vol) {
     
 // This is a master change volume coming from the audio source, e.g. your iphone with Spotify. This will take that volume and translate that to a new volume level for every active speaker.
 server.on('volumeChange', (data) => {
-    log.info("Volume change requested");
+    log.info("Volume change requested: request master volume "+data);
     config.mastervolume = data;		// -30 to 0dB, or -144 for mute
     for (var i in zones) {
         if (zones[i].enabled) {
