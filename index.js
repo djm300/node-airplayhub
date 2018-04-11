@@ -77,7 +77,7 @@ function mqttPub(topic, payload, options) {
 
 log.debug("MQTT Options from config: ", config.mqttOptions);
 
-var mqttOpts = Object.assign(config.mqttOptions, { will: { topic: config.name + '/connected', payload: '0', retain: true } });
+var mqttOpts = Object.assign(config.mqttOptions, { will: { topic: config.name + '/status/connected', payload: '0', retain: true } });
 log.debug("MQTT URL: ", config.mqttUrl);
 log.debug("MQTT Options: ", mqttOpts);
 const mqtt = Mqtt.connect(config.mqttUrl, mqttOpts);
@@ -87,10 +87,11 @@ const mqtt = Mqtt.connect(config.mqttUrl, mqttOpts);
 mqtt.on('connect', () => {
     log.info('mqtt connected', config.mqttUrl);
 
-    mqttPub(config.mqttTopic + '/connected', '1', { retain: true });
+    mqttPub(config.mqttTopic + '/status/connected', '1', { retain: true });
 
-    const topic = config.mqttTopic + '/set/#';
+    var topic = config.mqttTopic + '/#';
     log.info('mqtt subscribe ' + topic);
+
     mqtt.subscribe(topic);
 });
 
@@ -113,7 +114,7 @@ mqtt.on('reconnect', () => {
 mqtt.on('message', (topic, message) => {
     message = message.toString();
     log.debug('mqtt < ', topic, message);
-    const [, getset, speaker, command] = topic.split('/');
+    var [, getset, speaker, command] = topic.split('/');
 
     var zoneUnknown = true;
     for (var i in zones) {
@@ -122,14 +123,16 @@ mqtt.on('message', (topic, message) => {
         }
     }
 
+    if ( speaker.toLowerCase() == "GLOBAL".toLowerCase() ) {
+        log.info('Request for global volume - ignoring speaker name', speaker);
+	zoneUnknown = false;
+    }
+
     if (zoneUnknown) {
         log.info('unknown speaker ', speaker);
         return;
     }
 
-    if ( speaker.toLowerCase() !== "GLOBAL".toLowerCase() ) {
-        log.info('Request for global volume - ignoring speaker name', speaker);
-    }
 
     let obj;
 
@@ -397,7 +400,7 @@ function _setVolume(zonename, volume) {
     }
     config.zones = zones;
     fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
-    return resp;
+    return volume;
 }
 app.get('/setvol/:zonename/:volume', function (req, res) {
     var zonename = req.params.zonename;
