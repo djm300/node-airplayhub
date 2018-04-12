@@ -173,7 +173,7 @@ if (config.mqtt) {
         var zoneUnknown = true;
         for (var i in zones) {
             if (zones[i].name.toLowerCase() == speaker.toLowerCase() && speaker.toLowerCase() !== "GLOBAL".toLowerCase()) {
-                // This is a known speaker
+                // This is a known speaker - continue parsing
                 zoneUnknown = false;
             }
         }
@@ -189,8 +189,6 @@ if (config.mqtt) {
         }
 
         let obj;
-
-
 
         switch (command) {
             case 'enable':
@@ -215,55 +213,63 @@ if (config.mqtt) {
                 _stopZone(speaker);
                 break;
             case 'volume':
-                // Handle a request for the compositevolume (aka global volume)
-                if (speaker.toLowerCase == "GLOBAL".toLowerCase()) {
-                    log.debug("MQTT message received for global volume");
-                    if (getset == "get") {
-                        log.debug("MQTT requesting status of global volume");
-                    } else if (getset == "set") {
-                        log.debug("MQTT requesting SETTING of global volume");
-                    }
-                }
-
-                // So not a global request
-                if (getset == "get") {
-                    _getVolume(speaker);
-                    log.debug("MQTT requesting status of speaker volume");
-
-                } else {
-                    log.debug("MQTT requesting SETTING of speaker volume");
-                    if (isNaN(message)) {
-                        try {
-                            obj = JSON.parse(message);
-                            _setVolume(speaker, obj.val);
-                        } catch (err) {
-
+                switch (speaker.toLowerCase()) {
+                    // setting global volume
+                    case 'GLOBAL':
+                        log.debug("MQTT message received for global volume");
+                        switch (getset) {
+                            // get global volume
+                            case 'get':
+                                log.debug("MQTT requesting status of global volume");
+                                _getCompositeVolume();
+                                break;
+                                // set global volume
+                            case 'set':
+                                log.debug("MQTT requesting SETTING of global volume");
+                                _setCompositeVolume(parseInt(message, 10));
+                                break;
                         }
-                    } else {
-                        _setVolume(speaker, parseInt(message, 10));
-                    }
-                    break;
+                    default:
+                        switch (getset) {
+                            // get speaker volume
+                            case 'get':
+                                log.debug("MQTT requesting status of speaker volume");
+                                _getVolume(speaker);
+                                // set speaker volume
+                            case 'set':
+                                log.debug("MQTT requesting SETTING of speaker volume");
+                                if (isNaN(message)) {
+                                    try {
+                                        obj = JSON.parse(message);
+                                        _setVolume(speaker, obj.val);
+                                    } catch (err) {
+
+                                    }
+                                } else {
+                                    _setVolume(speaker, parseInt(message, 10));
+                                }
+                                break;
+                        }
                 }
-                break;
-            default:
+
         }
     });
 
     function _getVolume(speaker) {
         if (config.mqtt) {
-            mqttPub("config.mqttTopic" + "/status/"+speaker+"/volume", "0", {})
+            mqttPub("config.mqttTopic" + "/status/" + speaker + "/volume", "0", {});
         }
     }
 
     function _setCompositeVolume(volume) {
         if (config.mqtt) {
-            mqttPub("config.mqttTopic" + "/status/GLOBAL/volume", "0", {})
+            mqttPub("config.mqttTopic" + "/status/GLOBAL/volume", "0", {});
         }
     }
 
     function _getCompositeVolume() {
         if (config.mqtt) {
-            mqttPub("config.mqttTopic" + "/status/GLOBAL/volume", "0", {})
+            mqttPub("config.mqttTopic" + "/status/GLOBAL/volume", "0", {});
         }
     }
 
