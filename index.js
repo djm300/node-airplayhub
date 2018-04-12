@@ -55,7 +55,8 @@ try {
 
 } catch (e) {
     log.debug('Configuration could not be found, writing new one');
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+// Not doing this - if parsing fails, this will overwrite the config file with a  default
+//    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
 }
 
 // define internal variables for speakers
@@ -67,7 +68,21 @@ var idleTimer;
 // start device which can stream to other airplay speakers
 var server = new airtunesserver({ serverName: config.servername, verbose: false });
 
+
 // setup mqtt
+if (config.mqtt) {
+
+log.info('MQT enabled, connecting...');
+
+log.debug("MQTT Options from config: ", config.mqttOptions);
+
+var mqttOpts = Object.assign(config.mqttOptions, { will: { topic: config.mqttTopic + '/status/connected', payload: '0', retain: true } });
+log.debug("MQTT URL: ", config.mqttUrl);
+log.debug("MQTT Options: ", mqttOpts);
+
+
+const mqtt = Mqtt.connect(config.mqttUrl, mqttOpts);
+
 
 function mqttPub(topic, payload, options) {
     log.debug('mqtt >', topic, payload);
@@ -75,12 +90,7 @@ function mqttPub(topic, payload, options) {
 }
 
 
-log.debug("MQTT Options from config: ", config.mqttOptions);
 
-var mqttOpts = Object.assign(config.mqttOptions, { will: { topic: config.name + '/status/connected', payload: '0', retain: true } });
-log.debug("MQTT URL: ", config.mqttUrl);
-log.debug("MQTT Options: ", mqttOpts);
-const mqtt = Mqtt.connect(config.mqttUrl, mqttOpts);
 
 
 
@@ -161,6 +171,7 @@ mqtt.on('message', (topic, message) => {
     -- in both cases, result will be sent via airplayhub/status/GLOBAL/volume with an int payload
     
     */
+
     switch (command) {
         case 'enable':
             if (message === 'false' || message === '0') {
@@ -232,6 +243,10 @@ function _setCompositeVolume(volume) {
 function _getCompositeVolume() {
     mqttPub("config.mqttTopic" + "/status", "0", {})
 }
+
+}
+
+
 
 // debug logging on the airtunes streamer pipeline
 airtunes.on('buffer', status => {
