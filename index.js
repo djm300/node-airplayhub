@@ -96,11 +96,6 @@ if (config.mqtt) {
 
     const mqtt = Mqtt.connect(config.mqttUrl, mqttOpts);
 
-    function mqttPub(topic, payload, options) {
-        log.debug('mqtt >', topic, payload);
-        mqtt.publish(topic, payload, options);
-    }
-
     mqtt.on('connect', () => {
         log.info('mqtt connected', config.mqttUrl);
 
@@ -160,32 +155,46 @@ if (config.mqtt) {
         */
     mqtt.on('message', (topic, message) => {
         message = message.toString();
-        log.debug('mqtt < ', topic, message);
-        var [, getset, speaker, command] = topic.split('/');
+        log.debug('incoming mqtt message < ', topic, message);
+        var [ , msgtype, speaker, command] = topic.split('/');
 
         // If it's a status message, ignore it
-        if (getset.toLowerCase() == "status") {
+        if (_isStatusMessage(msgtype)) {
             log.debug("Status message received: <" + speaker + "> - " + message);
             return;
         }
 
-        // Check whether this message is about GLOBAL or a specific speaker which we know about 
-        var zoneUnknown = true;
-        for (var i in zones) {
-            if (zones[i].name.toLowerCase() == speaker.toLowerCase() && speaker.toLowerCase() !== "GLOBAL".toLowerCase()) {
-                // This is a known speaker - continue parsing
-                zoneUnknown = false;
-            }
+
+        // Stop processing if the msgtype is invalid, so not get or set
+        if !(_isValidMessageType(msgtype))  {
+            log.info('message type invalid: ', msgtype);
+            return;
         }
-        if (speaker.toLowerCase() == "GLOBAL".toLowerCase()) {
-            // This request is about GLOBAL volume
-            log.info('Request for global volume - ignoring speaker name', speaker);
-            zoneUnknown = false;
-        }
-        if (zoneUnknown) {
-            // We don't know what this is about - break
+
+        // Stop processing if we don't know this speaker
+        if  !(_isSpeakerKnown(speaker)) {
             log.info('unknown speaker ', speaker);
             return;
+        }
+
+        if (_isGlobalVolumeMessage(speaker)) {
+            // This request is about GLOBAL volume
+            log.info('Request for global volume - ignoring speaker name', speaker);
+
+            // setting global volume
+            log.debug("MQTT message received for global volume");
+            switch (msgtype) {
+                // get global volume
+                case 'get':
+                   log.debug("MQTT requesting status of global volume");
+                   _getCompositeVolume();
+                   break;
+                // set global volume
+                case 'set':
+                    log.debug("MQTT requesting SETTING of global volume");
+                    _setCompositeVolume(parseInt(message, 10));
+                    break;
+             }
         }
 
         let obj;
@@ -213,23 +222,6 @@ if (config.mqtt) {
                 _stopZone(speaker);
                 break;
             case 'volume':
-                switch (speaker.toLowerCase()) {
-                    // setting global volume
-                    case 'GLOBAL':
-                        log.debug("MQTT message received for global volume");
-                        switch (getset) {
-                            // get global volume
-                            case 'get':
-                                log.debug("MQTT requesting status of global volume");
-                                _getCompositeVolume();
-                                break;
-                                // set global volume
-                            case 'set':
-                                log.debug("MQTT requesting SETTING of global volume");
-                                _setCompositeVolume(parseInt(message, 10));
-                                break;
-                        }
-                    default:
                         switch (getset) {
                             // get speaker volume
                             case 'get':
@@ -252,7 +244,6 @@ if (config.mqtt) {
                         }
                 }
 
-        }
     });
 
     function _getVolume(speaker) {
@@ -424,12 +415,6 @@ app.get('/stopzone/:zonename', function (req, res) {
     resp = _stopZone(zonename);
     res.json(resp);
 });
-
-
-
-
-
-
 
 // SET VOLUME (with composite volume)
 function _setVolume(zonename, volume) {
@@ -641,8 +626,17 @@ browser.on('down', function (service) {
 });
 
 
+// MQTT functions
+    function mqttPub(topic, payload, options) {
+        log.debug('mqtt >', topic, payload);
+        mqtt.publish(topic, payload, options);
+    }
+
+
 // Assist functions
-function _isSpeakerKnown(speakername) {
+
+// speaker is a string, the speakername
+function _isSpeakerKnown(speaker) {
         // Check whether this message is about GLOBAL or a specific speaker which we know about 
         for (var i in zones) {
             if (zones[i].name.toLowerCase() == speaker.toLowerCase() || speaker.toLowerCase() == "GLOBAL".toLowerCase()) {
@@ -654,20 +648,29 @@ function _isSpeakerKnown(speakername) {
         return false;
 }
 
-function _isStatusMessage(topic) {
-        var [, getset, speaker, command] = topic.split('/');
-        if (getset.toLowerCase() == "status") {
+// msgtype is a string: get, set or status
+function _isStatusMessage(msgtype) {
+        if (msgtype.toLowerCase() == "status") {
             return true;
         }
         return false;
 }
 
-function _isGlobalVolumeMessage () {
+// speaker is a string, the speakername
+function _isGlobalVolumeMessage(speaker) {
         if (speaker.toLowerCase() == "GLOBAL".toLowerCase()) {
             // This request is about GLOBAL volume
-        return true;
+            return true;
         }
 return false;
+}
+
+function _isValidMessageType(msgtype) {
+     if (['get', 'set', 'status'].indexOf(msgtype) >= 0)   {
+            // The msgtype is good
+            return true;
+        }
+     return false;
 }
 
 /*
