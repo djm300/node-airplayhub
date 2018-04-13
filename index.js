@@ -38,9 +38,6 @@ var config = {
 var configPath = './config.json';
 var mqtt;
 
-// Set up logger
-log.setLevel(config.verbosity);
-
 log.info('Application starting');
 
 // Read command line argument and see if there is a config file available - else read ./config.json
@@ -63,6 +60,9 @@ try {
     // Not doing this - if parsing fails, this will overwrite the config file with a  default
     //    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
 }
+
+// Set up logger
+log.setLevel(config.verbosity);
 
 // define internal variables for speakers
 var zones = config.zones;
@@ -187,12 +187,12 @@ if (config.mqtt) {
             switch (msgtype) {
                 // get global volume
                 case 'get':
-                   log.debug("MQTT requesting status of global volume");
+                   log.info("MQTT requesting status of global volume");
                    _getCompositeVolume();
                    break;
                 // set global volume
                 case 'set':
-                    log.debug("MQTT requesting SETTING of global volume");
+                    log.info("MQTT requesting SETTING of global volume");
                     _setCompositeVolume(parseInt(message, 10));
                     break;
              }
@@ -249,18 +249,21 @@ if (config.mqtt) {
 
     function _getVolume(speaker) {
         if (config.mqtt) {
+            log.debug("Publishing speaker volume for "+speaker);
             mqttPub("config.mqttTopic" + "/status/" + speaker + "/volume", "0", {});
         }
     }
 
     function _setCompositeVolume(volume) {
         if (config.mqtt) {
+            log.debug("Setting composite volume to "+volume);
             mqttPub("config.mqttTopic" + "/status/GLOBAL/volume", "0", {});
         }
     }
 
     function _getCompositeVolume() {
         if (config.mqtt) {
+            log.debug("Publishing composite volume "+volume);
             mqttPub("config.mqttTopic" + "/status/GLOBAL/volume", "0", {});
         }
     }
@@ -602,11 +605,34 @@ function validateDevice(service) {
 
 };
 
+// On termination signal
 process.on('SIGTERM', function () {
-    log.debug("Exiting...");
+    log.debug("Termination requested - Exiting...");
     log.debug("Writing config to " + configPath);
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+    airtunes.stopAll(() => {
+           log.info("Stopping stream to all zones");
+           for (var i in zones) {
+               zones[i].enabled = false;
+               log.info("Disabled zone " + zones[i].name);
+           }
+           fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+    });
     process.exit(1);
+});
+
+// On CTRL+C
+process.on('SIGINT', function () {
+    log.debug("User requested exit - Exiting...");
+    log.debug("Writing config to " + configPath);
+    airtunes.stopAll(() => {
+           log.info("Stopping stream to all zones");
+           for (var i in zones) {
+               zones[i].enabled = false;
+               log.info("Disabled zone " + zones[i].name);
+           }
+           fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+    });
+    process.exit(0);
 });
 
 
