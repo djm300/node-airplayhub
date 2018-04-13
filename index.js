@@ -473,11 +473,6 @@ app.get('/zones', function (req, res) {
 
 
 
-
-
-
-
-
 // HIDE A ZONE
 function _hideZone(zonename) {
     for (var i in zones) {
@@ -555,9 +550,6 @@ function getArtwork(artist, album, callback) {
         callback('/genericart.png');
     });
 }
-
-
-
 
 
 // DISCOVERY FUNCTIONS FOR AIRPLAY DEVICES
@@ -647,5 +639,40 @@ browser.on('down', function (service) {
     log.debug("Device is down: " + JSON.stringify(service), null, 4);
 
 });
+
+
+// Assist functions
+function _isSpeakerKnown(speakername) {
+        // Check whether this message is about GLOBAL or a specific speaker which we know about 
+        for (var i in zones) {
+            if (zones[i].name.toLowerCase() == speaker.toLowerCase() || speaker.toLowerCase() == "GLOBAL".toLowerCase()) {
+                // This is a known speaker - continue parsing
+		return true;
+            }
+        }
+
+        return false;
+}
+
+function _isStatusMessage(topic) {
+        var [, getset, speaker, command] = topic.split('/');
+        if (getset.toLowerCase() == "status") {
+            return true;
+        }
+        return false;
+}
+
+function _isGlobalVolumeMessage () {
+        if (speaker.toLowerCase() == "GLOBAL".toLowerCase()) {
+            // This request is about GLOBAL volume
+        return true;
+        }
+return false;
+}
+
+/*
+function _ () {
+}
+*/
 
 browser.start();
