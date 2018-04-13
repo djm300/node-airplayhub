@@ -36,6 +36,7 @@ var config = {
     }
 };
 var configPath = './config.json';
+var mqtt;
 
 // Set up logger
 log.setLevel(config.verbosity);
@@ -94,7 +95,7 @@ if (config.mqtt) {
     log.debug("MQTT Options: ", mqttOpts);
 
 
-    const mqtt = Mqtt.connect(config.mqttUrl, mqttOpts);
+    mqtt = Mqtt.connect(config.mqttUrl, mqttOpts);
 
     mqtt.on('connect', () => {
         log.info('mqtt connected', config.mqttUrl);
@@ -166,13 +167,13 @@ if (config.mqtt) {
 
 
         // Stop processing if the msgtype is invalid, so not get or set
-        if !(_isValidMessageType(msgtype))  {
+        if (!(_isValidMessageType(msgtype)))  {
             log.info('message type invalid: ', msgtype);
             return;
         }
 
         // Stop processing if we don't know this speaker
-        if  !(_isSpeakerKnown(speaker)) {
+        if  (!(_isSpeakerKnown(speaker))) {
             log.info('unknown speaker ', speaker);
             return;
         }
