@@ -157,7 +157,7 @@ if (config.mqtt) {
     mqtt.on('message', (topic, message) => {
         message = message.toString();
         log.debug('incoming mqtt message < ', topic, message);
-        var [ , msgtype, speaker, command] = topic.split('/');
+        var [, msgtype, speaker, command] = topic.split('/');
 
         // If it's a status message, ignore it
         if (_isStatusMessage(msgtype)) {
@@ -167,13 +167,13 @@ if (config.mqtt) {
 
 
         // Stop processing if the msgtype is invalid, so not get or set
-        if (!(_isValidMessageType(msgtype)))  {
+        if (!(_isValidMessageType(msgtype))) {
             log.info('message type invalid: ', msgtype);
             return;
         }
 
         // Stop processing if we don't know this speaker
-        if  (!(_isSpeakerKnown(speaker))) {
+        if (!(_isSpeakerKnown(speaker))) {
             log.info('unknown speaker ', speaker);
             return;
         }
@@ -187,21 +187,22 @@ if (config.mqtt) {
             switch (msgtype) {
                 // get global volume
                 case 'get':
-                   log.info("MQTT requesting status of global volume");
-                   _getCompositeVolume();
-                   break;
-                // set global volume
+                    log.info("MQTT requesting status of global volume");
+                    _getCompositeVolume();
+                    break;
+                    // set global volume
                 case 'set':
                     log.info("MQTT requesting SETTING of global volume");
                     _setCompositeVolume(parseInt(message, 10));
                     break;
-             }
+            }
         }
 
         let obj;
 
         switch (command) {
             case 'enable':
+                log.debug("Enable message received via MQTT for zone "+speaker);
                 if (message === 'false' || message === '0') {
                     _stopZone(speaker);
                 } else if (message === 'true' || parseInt(message, 10) > 0) {
@@ -220,51 +221,75 @@ if (config.mqtt) {
                 }
                 break;
             case 'disable':
+                log.debug("Disable message received via MQTT for zone "+speaker);
                 _stopZone(speaker);
                 break;
             case 'volume':
-                        switch (getset) {
-                            // get speaker volume
-                            case 'get':
-                                log.debug("MQTT requesting status of speaker volume");
-                                _getVolume(speaker);
-                                // set speaker volume
-                            case 'set':
-                                log.debug("MQTT requesting SETTING of speaker volume");
-                                if (isNaN(message)) {
-                                    try {
-                                        obj = JSON.parse(message);
-                                        _setVolume(speaker, obj.val);
-                                    } catch (err) {
+            log.debug("Volume message received via MQTT for zone "+speaker);
+                switch (msgtype) {
+                    // get speaker volume
+                    case 'get':
+                        log.debug("MQTT requesting status of speaker volume");
+                        _getVolume(speaker);
+                        // set speaker volume
+                    case 'set':
+                        log.debug("MQTT requesting SETTING of speaker volume");
+                        if (isNaN(message)) {
+                            try {
+                                obj = JSON.parse(message);
+                                _setVolume(speaker, obj.val);
+                            } catch (err) {
 
-                                    }
-                                } else {
-                                    _setVolume(speaker, parseInt(message, 10));
-                                }
-                                break;
+                            }
+                        } else {
+                            _setVolume(speaker, parseInt(message, 10));
                         }
+                        break;
                 }
+        }
 
     });
 
     function _getVolume(speaker) {
+        log.info("Get volume called for "+speaker)
+        for (var i in zones) {
+            if (zones[i].name.toLowerCase() == speaker.toLowerCase()) {
+                zones[i].volume = volume;
+                if (connectedDevices[i]) {
+                    log.info("Zone get volume called for "+zonename)               
+                    zonevol = connectedDevices[i].volume;
+                    if (config.mqtt) {
+                        mqttPub(config.mqttTopic + "/status/" +zonename + "/volume", zonevol.toString(), {});
+                    }                  
+                }
+                else {
+                    log.info("Zone "+zonename+" not found - ignoring request")               
+                }
+                resp = zones[i];
+            }
+        }
+    
+
+
+
         if (config.mqtt) {
-            log.debug("Publishing speaker volume for "+speaker);
+            log.debug("Publishing speaker volume for " + speaker);
             mqttPub("config.mqttTopic" + "/status/" + speaker + "/volume", "0", {});
         }
     }
 
     function _setCompositeVolume(volume) {
         if (config.mqtt) {
-            log.debug("Setting composite volume to "+volume);
-            mqttPub("config.mqttTopic" + "/status/GLOBAL/volume", "0", {});
+            log.debug("Setting composite volume to " + volume);
+            mqttPub(config.mqttTopic + "/status/GLOBAL/volume", volume, {});
+            config.mastervolume = volume;
         }
     }
 
     function _getCompositeVolume() {
         if (config.mqtt) {
-            log.debug("Publishing composite volume "+volume);
-            mqttPub("config.mqttTopic" + "/status/GLOBAL/volume", "0", {});
+            log.debug("Publishing composite volume " +  config.mastervolume);
+            mqttPub(config.mqttTopic + "/status/GLOBAL/volume", config.mastervolume, {});
         }
     }
 
@@ -370,6 +395,7 @@ log.debug("Web page requested");
 function _startZone(zonename) {
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+            log.debug("Starting zone "+zonename);
             connectedDevices[i] = airtunes.add(zones[i].host, {
                 port: zones[i].port,
                 volume: compositeVolume(zones[i].volume)
@@ -400,6 +426,7 @@ function _stopZone(zonename) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             zones[i].enabled = false;
             if (connectedDevices[i]) {
+                log.debug("Stopping zone "+zonename);
                 connectedDevices[i].stop();
             }
             resp = zones[i];
@@ -422,11 +449,19 @@ app.get('/stopzone/:zonename', function (req, res) {
 
 // SET VOLUME (with composite volume)
 function _setVolume(zonename, volume) {
+    log.info("Set volume called for "+zonename+" - set volume to "+volume)
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             zones[i].volume = volume;
             if (connectedDevices[i]) {
+                log.info("Zone set volume called for "+zonename+" - set volume to "+volume)               
                 connectedDevices[i].setVolume(compositeVolume(volume));
+                if (config.mqtt) {
+                    mqttPub(config.mqttTopic + "/status/" +zonename + "/volume", volume.toString(), {});
+                }                  
+            }
+            else {
+                log.info("Zone "+zonename+" not found - ignoring request")               
             }
             resp = zones[i];
         }
@@ -610,12 +645,12 @@ process.on('SIGTERM', function () {
     log.debug("Termination requested - Exiting...");
     log.debug("Writing config to " + configPath);
     airtunes.stopAll(() => {
-           log.info("Stopping stream to all zones");
-           for (var i in zones) {
-               zones[i].enabled = false;
-               log.info("Disabled zone " + zones[i].name);
-           }
-           fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+        log.info("Stopping stream to all zones");
+        for (var i in zones) {
+            zones[i].enabled = false;
+            log.info("Disabled zone " + zones[i].name);
+        }
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     });
     process.exit(1);
 });
@@ -625,12 +660,12 @@ process.on('SIGINT', function () {
     log.debug("User requested exit - Exiting...");
     log.debug("Writing config to " + configPath);
     airtunes.stopAll(() => {
-           log.info("Stopping stream to all zones");
-           for (var i in zones) {
-               zones[i].enabled = false;
-               log.info("Disabled zone " + zones[i].name);
-           }
-           fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+        log.info("Stopping stream to all zones");
+        for (var i in zones) {
+            zones[i].enabled = false;
+            log.info("Disabled zone " + zones[i].name);
+        }
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
     });
     process.exit(0);
 });
@@ -654,50 +689,50 @@ browser.on('down', function (service) {
 
 
 // MQTT functions
-    function mqttPub(topic, payload, options) {
-        log.debug('mqtt >', topic, payload);
-        mqtt.publish(topic, payload, options);
-    }
+function mqttPub(topic, payload, options) {
+    log.debug('mqtt >', topic, payload);
+    mqtt.publish(topic, payload, options);
+}
 
 
 // Assist functions
 
 // speaker is a string, the speakername
 function _isSpeakerKnown(speaker) {
-        // Check whether this message is about GLOBAL or a specific speaker which we know about 
-        for (var i in zones) {
-            if (zones[i].name.toLowerCase() == speaker.toLowerCase() || speaker.toLowerCase() == "GLOBAL".toLowerCase()) {
-                // This is a known speaker - continue parsing
-		return true;
-            }
+    // Check whether this message is about GLOBAL or a specific speaker which we know about 
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == speaker.toLowerCase() || speaker.toLowerCase() == "GLOBAL".toLowerCase()) {
+            // This is a known speaker - continue parsing
+            return true;
         }
+    }
 
-        return false;
+    return false;
 }
 
 // msgtype is a string: get, set or status
 function _isStatusMessage(msgtype) {
-        if (msgtype.toLowerCase() == "status") {
-            return true;
-        }
-        return false;
+    if (msgtype.toLowerCase() == "status") {
+        return true;
+    }
+    return false;
 }
 
 // speaker is a string, the speakername
 function _isGlobalVolumeMessage(speaker) {
-        if (speaker.toLowerCase() == "GLOBAL".toLowerCase()) {
-            // This request is about GLOBAL volume
-            return true;
-        }
-return false;
+    if (speaker.toLowerCase() == "GLOBAL".toLowerCase()) {
+        // This request is about GLOBAL volume
+        return true;
+    }
+    return false;
 }
 
 function _isValidMessageType(msgtype) {
-     if (['get', 'set', 'status'].indexOf(msgtype) >= 0)   {
-            // The msgtype is good
-            return true;
-        }
-     return false;
+    if (['get', 'set', 'status'].indexOf(msgtype) >= 0) {
+        // The msgtype is good
+        return true;
+    }
+    return false;
 }
 
 /*
