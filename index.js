@@ -176,7 +176,8 @@ if (config.mqtt) {
         if (!(_isSpeakerKnown(speaker))) {
             log.info('unknown speaker ', speaker);
             return;
-        }
+        } 
+
 
         if (_isGlobalVolumeMessage(speaker)) {
             // This request is about GLOBAL volume
@@ -281,7 +282,7 @@ if (config.mqtt) {
     function _setCompositeVolume(volume) {
         if (config.mqtt) {
             log.debug("Setting composite volume to " + volume);
-            mqttPub(config.mqttTopic + "/status/GLOBAL/volume", volume, {});
+            mqttPub(config.mqttTopic + "/status/GLOBAL/volume", volume.toString(), {});
             config.mastervolume = volume;
         }
     }
