@@ -154,14 +154,23 @@ if (config.mqtt) {
         -- in both cases, result will be sent via airplayhub/status/GLOBAL/volume with an int payload
     
         */
+
+       /* 
+       PRINCIPLE SHOULD BE
+       1. Debug level log on full message received
+       2. Perform action
+       3. Info level log on action performed (so should be in the action helper function)
+       4. MQTT message on action performed (also done via action helper function
+       */
+
+
     mqtt.on('message', (topic, message) => {
         message = message.toString();
         log.debug('incoming mqtt message < ', topic, message);
         var [, msgtype, speaker, command] = topic.split('/');
 
         // If it's a status message, ignore it
-        if (_isStatusMessage(msgtype)) {
-            log.debug("Status message received: <" + speaker + "> - " + message);
+        if (_isStatusMessage(msgtype)) {            log.debug("Status message received: <" + speaker + "> - " + message);
             return;
         }
 
@@ -320,7 +329,7 @@ server.on('clientConnected', function (stream) {
 // if someone disconnects to the airplay hub
 server.on('clientDisconnected', (data) => {
     clearTimeout(idleTimer);
-    log.info("Client disconnected from airplayhub");
+	    log.info("Client disconnected from airplayhub");
     if (config.idletimout > 0) {
         idleTimer = setTimeout(() => {
             airtunes.stopAll(() => {
@@ -358,6 +367,8 @@ function compositeVolume(vol) {
 }
 
 // This is a master change volume coming from the audio source, e.g. your iphone with Spotify. This will take that volume and translate that to a new volume level for every active speaker.
+// Composite volume is between -30 & 0 (or -144 for mute)
+// Per zone volume is between 0 & 100
 server.on('volumeChange', (data) => {
     log.info("Volume change requested: request master volume " + data);
     config.mastervolume = data; // -30 to 0dB, or -144 for mute
@@ -365,6 +376,12 @@ server.on('volumeChange', (data) => {
         if (zones[i].enabled) {
             connectedDevices[i].setVolume(compositeVolume(zones[i].volume));
             log.info("Set volume for zone " + zones[i].name + " to " + compositeVolume(zones[i].volume));
+            if (config.mqtt)  {
+
+	   // TODO MQTT PUSH OUT COMPOSITEVOLUME
+           // TODO MQTT ALSO PUSH OUT PER ZONE VOLUME
+
+           }
         }
     }
     clearTimeout(idleTimer);
