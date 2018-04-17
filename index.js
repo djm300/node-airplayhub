@@ -336,20 +336,8 @@ server.on('metadataChange', (data) => {
 
 
 server.on('volumeChange', (data) => {
-    log.info("Volume change requested: request master volume " + data);
-    config.mastervolume = data; // -30 to 0dB, or -144 for mute
-    for (var i in zones) {
-        if (zones[i].enabled) {
-            connectedDevices[i].setVolume(compositeVolume(zones[i].volume));
-            log.info("Set volume for zone " + zones[i].name + " to " + compositeVolume(zones[i].volume));
-            if (config.mqtt) {
-
-                // TODO MQTT PUSH OUT COMPOSITEVOLUME
-                // TODO MQTT ALSO PUSH OUT PER ZONE VOLUME
-
-            }
-        }
-    }
+    log.info("Volume change requested from sender: request master volume " + data);
+    _setCompositeVolume(data);
     clearTimeout(idleTimer);
 });
 
@@ -754,13 +742,38 @@ function _getVolume(speaker) {
     }
 }
 
+// If we change the composite volume while speakers are replaying, we need to re-scale all the enabled zones.
+function _compositeRescale() {
+    // For all active speakers
+    for (var i in zones) {
+        if (zones[i].enabled) {
+            // Re-scale the existing per-speaker volume with the new composite volume
+            connectedDevices[i].setVolume(compositeVolume(zones[i].volume));
+            log.info("Rescale volume for zone " + zones[i].name + " to " + compositeVolume(zones[i].volume));
+            if (config.mqtt) {
+                // MQTT publish all new volumes to sync home assistant
+                _getVolume(zones[i].name);
+            }
+        }
+    }
+    // MQTT publish new composite volume for good measure
+    _getCompositeVolume()
+ }
+    
+
 function _setCompositeVolume(volume) {
     // TODO Check if volume is -144 or (30 to zero)
+    var _volume = (parseInt(message, 10));
+    log.debug("Composite volume changed to " + _volume.toString());
+
+    // If OK THEN set master volume
+    config.mastervolume = _volume;  // -30 to 0dB, or -144 for mute
+    
     if (config.mqtt) {
         log.debug("Setting composite volume to " + volume);
         mqttPub(config.mqttTopic + "/status/GLOBAL/volume", volume.toString(), {});
-        config.mastervolume = volume;
     }
+    _compositeRescale()
 }
 
 function _getCompositeVolume() {
