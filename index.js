@@ -108,6 +108,9 @@ if (config.mqtt) {
         log.info('mqtt subscribe ' + topic);
 
         mqtt.subscribe(topic);
+        
+        // For syncing any home assistant instances which are stateful, just list status and volume of zones for good measure
+        _statusAllZones()
     });
 
     mqtt.on('close', () => {
@@ -583,6 +586,36 @@ function compositeVolume(vol) {
 }
 
 
+// LIST STATUS OF ALL ZONES ON MQTT CONNECT (IF MQTT ENABLED)
+function _statusAllZones() {
+    for (var i in zones) {
+            if (config.mqtt) {
+                  _statusZone(zones[i].name);
+                  _getVolume(zones[i].name);
+                
+            }
+    }
+}
+
+
+// SEND STATUS OF ZONES
+function _statusZone(zonename) {
+    var resp = {
+        error: "zone not found"
+    };
+    for (var i in zones) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+                var zonestatus = (zones[i].enabled == 2 ? "1" : "0");
+                if (config.mqtt) {
+                    mqttPub(config.mqttTopic + "/status/" + zonename + "/enabled", zonestatus, {});
+                }
+
+            resp = zones[i];
+        }
+    }
+    return resp;
+}
+
 // START A ZONE
 function _startZone(zonename) {
     var resp = {
@@ -710,12 +743,6 @@ function _getVolume(speaker) {
             }
             resp = zones[i];
         }
-    }
-
-
-    if (config.mqtt) {
-        log.debug("Publishing speaker volume for " + speaker);
-        mqttPub("config.mqttTopic" + "/status/" + speaker + "/volume", "0", {});
     }
 }
 
