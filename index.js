@@ -514,8 +514,6 @@ function validateDevice(service) {
         }
     }
 
-    // If it is a new zone, thank you very much, add it and write it to our config
-    // TODO: I re-used the ./config.json used elsewhere in this application. Ideally, it should take the parameter passed in --config and not just 'require' the file but properly read it and parse it and write it back here
     if (zoneUnknown) {
         zones.push({
             "name": service.name,
@@ -604,7 +602,7 @@ function compositeVolume(vol) {
 // START A ZONE
 function _startZone(zonename) {
     for (var i in zones) {
-        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase() && zones[i].enabled == false) {
             log.debug("Starting zone " + zonename);
             connectedDevices[i] = airtunes.add(zones[i].host, {
                 port: zones[i].port,
@@ -625,7 +623,7 @@ function _startZone(zonename) {
 // STOP A ZONE
 function _stopZone(zonename) {
     for (var i in zones) {
-        if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase() && zones[i].enabled == true) {
             zones[i].enabled = false;
             if (connectedDevices[i]) {
                 log.debug("Stopping zone " + zonename);
