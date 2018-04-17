@@ -707,14 +707,14 @@ function _setVolume(zonename, volume) {
     var resp = {
         error: "zone not found"
     };
-    log.info("Set volume called for " + zonename + " - set volume to " + volume)
+    log.info("Set volume requested for speaker " + zonename + " - set speaker volume to " + volume)
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             // Setting configured per-speaker volume
             zones[i].volume = volume;
             if (connectedDevices[i]) {
                 // And adjusting the compositevolume of this speaker if it's active on the airtunes server
-                log.info("Zone set volume called for " + zonename + " - set volume to " + volume)
+                log.info("Speaker active - scaling volume request with compositevolume to " + compositeVolume(volume) + " for " + zonename)
                 connectedDevices[i].setVolume(compositeVolume(volume));
                 if (config.mqtt) {
                     mqttPub(config.mqttTopic + "/status/" + zonename + "/volume", volume.toString(), {});
