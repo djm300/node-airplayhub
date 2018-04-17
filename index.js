@@ -328,6 +328,13 @@ server.on('metadataChange', (data) => {
 // This is a master change volume coming from the audio source, e.g. your iphone with Spotify. This will take that volume and translate that to a new volume level for every active speaker.
 // Composite volume is between -30 & 0 (or -144 for mute)
 // Per zone volume is between 0 & 100
+
+/* Note on compositevolume: This is the volume used to scale the speaker volume WHEN it is playing on the airtunes server. 
+   speaker.volume is a configuration value kept locally. When the speaker volume is changed and the speaker is active, only then 
+   we will use the compositevolume to scale the playing volume in the airtunes speaker. The composite volume can be setted/getted via MQTT (not yet via WEBUI) and via the device streaming to the airtunes server.
+*/
+
+
 server.on('volumeChange', (data) => {
     log.info("Volume change requested: request master volume " + data);
     config.mastervolume = data; // -30 to 0dB, or -144 for mute
@@ -703,8 +710,10 @@ function _setVolume(zonename, volume) {
     log.info("Set volume called for " + zonename + " - set volume to " + volume)
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+            // Setting configured per-speaker volume
             zones[i].volume = volume;
             if (connectedDevices[i]) {
+                // And adjusting the compositevolume of this speaker if it's active on the airtunes server
                 log.info("Zone set volume called for " + zonename + " - set volume to " + volume)
                 connectedDevices[i].setVolume(compositeVolume(volume));
                 if (config.mqtt) {
@@ -730,7 +739,6 @@ function _getVolume(speaker) {
     log.info("Get volume called for " + speaker)
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == speaker.toLowerCase()) {
-            zones[i].volume = volume;
             if (connectedDevices[i]) {
                 log.info("Zone get volume called for " + zonename)
                 zonevol = connectedDevices[i].volume;
