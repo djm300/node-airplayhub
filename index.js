@@ -129,30 +129,36 @@ if (config.mqtt) {
 
     /*
         MQTT topics:
-    
-        airplayhub/status/Keuken/volume - message 10
+        
+        -- Zone setting: enabling, disabling & volume
+            airplayhub/set/Keuken/volume - message 10
+            -- Must contain message of format int
+            airplayhub/set/Keuken/enable - message true or empty
+            -- May have no message, message '1' or 'true' or message with random value. If message is false, this will be seen as speaker disable request.
+            airplayhub/set/Keuken/disable
+            -- Regardless of message content, will be considered as disable request.
 
+        -- Requesting status of zone 
+            airplayhub/get/Keuken/volume
+            -- get message: payload ignored, will always return volume
+            -- Result will be sent via airplayhub/status/Keuken/volume with an int payload (0-100)
 
-        airplayhub/set/Keuken/volume - message 10
-        -- Must contain message of format int
-        airplayhub/set/Keuken/enable - message true or empty
-        -- May have no message or message 'true' or message with random value. If message is false, this will be seen as speaker disable request.
+        -- Requesting status of GLOBAL volume
+            airplayhub/get/GLOBAL/volume or airplayhub/set/GLOBAL/volume without message
+            -- get message: payload ignored, will always return global volume
+            -- Result will be sent via airplayhub/status/GLOBAL/volume with an int payload (-144 for mute, 30 to 0 for volume)
+            -- Note that global volume scale is made so iPhone volume controls work when streaming to this airplayhub
+            
+        -- Setting GLOBAL volume
+            airplayhub/set/GLOBAL/volume 
+            -- set message: payload required and needs to be int.
+            -- in both cases, result will be sent via airplayhub/status/GLOBAL/volume with an int payload
 
-        airplayhub/set/Keuken/disable
-        -- Regardless of message content, will be considered as disable request.
+        -- Status report always via status topic
+            airplayhub/status/Keuken/volume - message 10
+            airplayhub/status/Living/enabled - message 1 (enabled) or 0 (disabled)
+            airplayhub/status/GLOBAL/volume - message is int payload (-144, 30 to 0)
 
-        airplayhub/get/Keuken/volume or airplayhub/set/Keuken/volume without message
-        -- get message: payload ignored, will always return volume
-        -- set message: payload required and needs to be int.
-        -- in both cases, result will be sent via airplayhub/status/Keuken/volume with an int payload
-
-        For setting the composite volume:
-        airplayhub/get/GLOBAL/volume or airplayhub/set/GLOBAL/volume without message
-        airplayhub/set/GLOBAL/volume 
-        -- get message: payload ignored, will always return global volume
-        -- set message: payload required and needs to be int.
-        -- in both cases, result will be sent via airplayhub/status/GLOBAL/volume with an int payload
-    
         */
 
     /*
@@ -204,6 +210,7 @@ if (config.mqtt) {
                 // set global volume
                 case 'set':
                     log.info("MQTT requesting SETTING of global volume");
+                    // TODO Need to check message is int or fail gracefully
                     _setCompositeVolume(parseInt(message, 10));
                     break;
             }
@@ -706,6 +713,7 @@ function _getVolume(speaker) {
 }
 
 function _setCompositeVolume(volume) {
+    // TODO Check if volume is -144 or (30 to zero)
     if (config.mqtt) {
         log.debug("Setting composite volume to " + volume);
         mqttPub(config.mqttTopic + "/status/GLOBAL/volume", volume.toString(), {});
