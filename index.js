@@ -158,7 +158,7 @@ if (config.mqtt) {
             airplayhub/status/Keuken/volume - message 10
             airplayhub/status/Living/enabled - message 1 (enabled) or 0 (disabled)
             airplayhub/status/GLOBAL/volume - message is int payload (-144, 30 to 0)
-
+            airplayhub/status/GLOBAL/trackinfo - message is JSON with trackinfo when updated
         */
 
     /*
