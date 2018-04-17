@@ -740,14 +740,14 @@ function _getVolume(speaker) {
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == speaker.toLowerCase()) {
             if (connectedDevices[i]) {
-                log.info("Zone get volume called for " + zonename)
+                log.info("Zone get volume called for " + speaker)
                 zonevol = connectedDevices[i].volume;
                 if (config.mqtt) {
-                    mqttPub(config.mqttTopic + "/status/" + zonename + "/volume", zonevol.toString(), {});
+                    mqttPub(config.mqttTopic + "/status/" + speaker + "/volume", zonevol.toString(), {});
                 }
             }
             else {
-                log.info("Zone " + zonename + " not found - ignoring request")
+                log.info("Zone " + speaker + " not found - ignoring request")
             }
             resp = zones[i];
         }
