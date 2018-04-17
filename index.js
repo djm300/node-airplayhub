@@ -12,7 +12,7 @@ const bonjour = require('bonjour')();
 var argv = require('minimist')(process.argv.slice(2));
 var app = express();
 var http = require('http');
-
+const spawn = require('child_process').spawn;
 
 // Set configuration file template
 var config = {
@@ -288,13 +288,13 @@ function startPipe() {
         server.stdout.pipe(airtunes);
         connected = true;
         log.info('Loopback connected');
-        mqttPub(config.name + '/connected', '2', {
+        mqttPub(config.mqttTopic + '/connected', '2', {
             retain: true
         });
         server.on('exit', () => {
             connected = false;
             log.info('Loopback disconnected');
-            mqttPub(config.name + '/connected', '1', {
+            mqttPub(config.mqttTopic + '/connected', '1', {
                 retain: true
             });
         });
@@ -303,7 +303,7 @@ function startPipe() {
         // tcp server
         server = net.createServer(c => {
             log.info('tcp client', c.remoteAddress + ':' + c.remotePort, 'connected');
-            mqttPub(config.name + '/connected', '2', {
+            mqttPub(config.mqttTopic + '/connected', '2', {
                 retain: true
             });
 
@@ -311,7 +311,7 @@ function startPipe() {
                 connected = false;
                 log.info('tcp client disconnected');
                 c.end();
-                mqttPub(config.name + '/connected', '1', {
+                mqttPub(config.mqttTopic + '/connected', '1', {
                     retain: true
                 });
             });
