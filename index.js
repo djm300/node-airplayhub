@@ -70,13 +70,6 @@ var connectedDevices = [];
 var trackinfo = {};
 var idleTimer;
 
-// start device which can stream to other airplay speakers
-var server = new airtunesserver({
-    serverName: config.servername,
-    verbose: false
-});
-
-
 // setup mqtt
 if (config.mqtt) {
 
@@ -276,72 +269,147 @@ if (config.mqtt) {
 airtunes.on('buffer', status => {
     log.debug('buffer', status);
 });
+let server;
 
-// if someone connects to the airplay hub, stream in into the airtunes sink
-server.on('clientConnected', function (stream) {
-    log.info("New connection on airplayhub");
-    clearTimeout(idleTimer);
-    stream.pipe(airtunes);
-    for (var i in zones) {
-        if (zones[i].enabled) {
-            log.info("Starting to stream to enabled zone " + zones[i].name);
-            connectedDevices[i] = airtunes.add(zones[i].host, {
-                port: zones[i].port,
-                volume: compositeVolume(zones[i].volume)
+
+// Input selector for multiroom hub
+// Pipe: Read from pipe which is supposed to contain 16 bit 44100Hz audio
+// TCP: Open a TCP socket to which a client can connect. This pipe again should contain 16 bit 44100Hz audio
+// Airplay: Announce our hub as an airplay airtunesserver and as soon as someone connects, stream this data.
+function startPipe() {
+    // loopback device - pipe
+    if (config.loopback) {
+        // arecord
+        // -f cd (16 bit little endian, 44100, stereo) 
+        // -D device to read from (pipe)
+        server = spawn('/usr/bin/arecord', ['-f', 'cd', '-D', config.device]);
+
+        // connect the output of arecord to airtunes
+        server.stdout.pipe(airtunes);
+        connected = true;
+        log.info('Loopback connected');
+        mqttPub(config.name + '/connected', '2', {
+            retain: true
+        });
+        server.on('exit', () => {
+            connected = false;
+            log.info('Loopback disconnected');
+            mqttPub(config.name + '/connected', '1', {
+                retain: true
             });
-        }
+        });
     }
-});
+    if (config.tcplisten) {
+        // tcp server
+        server = net.createServer(c => {
+            log.info('tcp client', c.remoteAddress + ':' + c.remotePort, 'connected');
+            mqttPub(config.name + '/connected', '2', {
+                retain: true
+            });
 
-// if someone disconnects to the airplay hub
-server.on('clientDisconnected', (data) => {
-    clearTimeout(idleTimer);
-    log.info("Client disconnected from airplayhub");
-    if (config.idletimout > 0) {
-        idleTimer = setTimeout(() => {
-            airtunes.stopAll(() => {
-                log.info("Stopping stream to all zones");
-                for (var i in zones) {
-                    zones[i].enabled = false;
-                    log.info("Disabled zone " + zones[i].name);
+            c.on('end', () => {
+                connected = false;
+                log.info('tcp client disconnected');
+                c.end();
+                mqttPub(config.name + '/connected', '1', {
+                    retain: true
+                });
+            });
+
+            c.on('error', err => {
+                log.error('tcp error', err);
+            });
+
+            c.on('timeout', err => {
+                log.error('tcp timeout', err);
+            });
+
+            c.pipe(airtunes, {
+                end: false
+            });
+            connected = true;
+        });
+
+        server.listen(config.port, () => {
+            log.info('tcp listener bound on port', config.port);
+        });
+    } else {
+        // airplay server
+        // if someone connects to the airplay hub, stream in into the airtunes sink
+		
+		server = new airtunesserver({
+			serverName: config.servername,
+			verbose: false
+		});
+
+        server.on('clientConnected', function(stream) {
+            log.info("New connection on airplayhub");
+            clearTimeout(idleTimer);
+            stream.pipe(airtunes);
+            for (var i in zones) {
+                if (zones[i].enabled) {
+                    log.info("Starting to stream to enabled zone " + zones[i].name);
+                    connectedDevices[i] = airtunes.add(zones[i].host, {
+                        port: zones[i].port,
+                        volume: compositeVolume(zones[i].volume)
+                    });
                 }
-                fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+            }
+        });
+
+        // if someone disconnects to the airplay hub
+        server.on('clientDisconnected', (data) => {
+            clearTimeout(idleTimer);
+            log.info("Client disconnected from airplayhub");
+            if (config.idletimout > 0) {
+                idleTimer = setTimeout(() => {
+                    airtunes.stopAll(() => {
+                        log.info("Stopping stream to all zones");
+                        for (var i in zones) {
+                            zones[i].enabled = false;
+                            log.info("Disabled zone " + zones[i].name);
+                        }
+                        fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
+                    });
+                }, config.idletimout * 1000);
+            }
+        });
+
+
+        server.on('metadataChange', (data) => {
+            log.info("Metadata changed");
+            trackinfo = data;
+            getArtwork(trackinfo.asar, trackinfo.asal, (url) => {
+                if (url) {
+                    trackinfo.albumart = url;
+                } else {
+                    trackinfo.albumart = '/genericart.png';
+                }
             });
-        }, config.idletimout * 1000);
+        });
+
+
+        // This is a master change volume coming from the audio source, e.g. your iphone with Spotify. This will take that volume and translate that to a new volume level for every active speaker.
+        // Composite volume is between -30 & 0 (or -144 for mute)
+        // Per zone volume is between 0 & 100
+
+        /* Note on compositevolume: This is the volume used to scale the speaker volume WHEN it is playing on the airtunes server. 
+           speaker.volume is a configuration value kept locally. When the speaker volume is changed and the speaker is active, only then 
+           we will use the compositevolume to scale the playing volume in the airtunes speaker. The composite volume can be setted/getted via MQTT (not yet via WEBUI) and via the device streaming to the airtunes server.
+        */
+
+
+        server.on('volumeChange', (data) => {
+            log.info("Volume change requested from sender: request master volume " + data);
+            _setCompositeVolume(data);
+            clearTimeout(idleTimer);
+        });
+
+        server.start();
     }
-});
+}
 
-
-server.on('metadataChange', (data) => {
-    log.info("Metadata changed");
-    trackinfo = data;
-    getArtwork(trackinfo.asar, trackinfo.asal, (url) => {
-        if (url) {
-            trackinfo.albumart = url;
-        } else {
-            trackinfo.albumart = '/genericart.png';
-        }
-    });
-});
-
-
-// This is a master change volume coming from the audio source, e.g. your iphone with Spotify. This will take that volume and translate that to a new volume level for every active speaker.
-// Composite volume is between -30 & 0 (or -144 for mute)
-// Per zone volume is between 0 & 100
-
-/* Note on compositevolume: This is the volume used to scale the speaker volume WHEN it is playing on the airtunes server. 
-   speaker.volume is a configuration value kept locally. When the speaker volume is changed and the speaker is active, only then 
-   we will use the compositevolume to scale the playing volume in the airtunes speaker. The composite volume can be setted/getted via MQTT (not yet via WEBUI) and via the device streaming to the airtunes server.
-*/
-
-
-server.on('volumeChange', (data) => {
-    log.info("Volume change requested from sender: request master volume " + data);
-    _setCompositeVolume(data);
-    clearTimeout(idleTimer);
-});
-
-server.start();
+startPipe();
 
 app.use('/icons', express.static(path.join(__dirname, 'root/icons'), {
     maxAge: '1y'
