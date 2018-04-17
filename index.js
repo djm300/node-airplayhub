@@ -365,13 +365,9 @@ log.debug("Web page requested");
 
 app.get('/startzone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
-    var resp = {
-        error: "zone not found"
-    };
 
     log.debug("Zone start requested for " + zonename);
-
-
+    
     resp = _startZone(zonename);
     res.json(resp);
 });
@@ -379,9 +375,6 @@ app.get('/startzone/:zonename', function (req, res) {
 
 app.get('/stopzone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
-    var resp = {
-        error: "zone not found"
-    };
 
     log.debug("Zone stop requested for " + zonename);
 
@@ -396,9 +389,6 @@ app.get('/setvol/:zonename/:volume', function (req, res) {
 
     log.debug("Volume change requested for " + zonename);
 
-    var resp = {
-        error: "zone not found"
-    };
     resp = _setVolume(zonename, volume);
     res.json(resp);
 });
@@ -417,9 +407,6 @@ app.get('/zones', function (req, res) {
 
 app.get('/hidezone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
-    var resp = {
-        error: "zone not found"
-    };
 
     log.debug("Zone hide requested for " + zonename);
 
@@ -430,9 +417,6 @@ app.get('/hidezone/:zonename', function (req, res) {
 
 app.get('/showzone/:zonename', function (req, res) {
     var zonename = req.params.zonename;
-    var resp = {
-        error: "zone not found"
-    };
 
     log.debug("Zone show requested for " + zonename);
 
@@ -601,6 +585,9 @@ function compositeVolume(vol) {
 
 // START A ZONE
 function _startZone(zonename) {
+    var resp = {
+        error: "zone not found"
+    };
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase() && zones[i].enabled == false) {
             log.debug("Starting zone " + zonename);
@@ -622,6 +609,9 @@ function _startZone(zonename) {
 
 // STOP A ZONE
 function _stopZone(zonename) {
+    var resp = {
+        error: "zone not found"
+    };
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase() && zones[i].enabled == true) {
             zones[i].enabled = false;
@@ -642,6 +632,9 @@ function _stopZone(zonename) {
 
 // SHOW A ZONE - ONLY USED IN WEBUI SO NO OUTPUT TO MQTT
 function _showZone(zonename) {
+    var resp = {
+        error: "zone not found"
+    };
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             zones[i].hidden = false;
@@ -655,6 +648,9 @@ function _showZone(zonename) {
 
 // HIDE A ZONE - ONLY USED IN WEBUI SO NO OUTPUT TO MQTT
 function _hideZone(zonename) {
+    var resp = {
+        error: "zone not found"
+    };
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             zones[i].hidden = true;
@@ -668,6 +664,9 @@ function _hideZone(zonename) {
 
 // SET VOLUME (with composite volume)
 function _setVolume(zonename, volume) {
+    var resp = {
+        error: "zone not found"
+    };
     log.info("Set volume called for " + zonename + " - set volume to " + volume)
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
@@ -692,6 +691,9 @@ function _setVolume(zonename, volume) {
 
 
 function _getVolume(speaker) {
+    var resp = {
+        error: "zone not found"
+    };
     log.info("Get volume called for " + speaker)
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == speaker.toLowerCase()) {
