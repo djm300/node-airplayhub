@@ -611,6 +611,10 @@ function _startZone(zonename) {
                 volume: compositeVolume(zones[i].volume)
             });
             zones[i].enabled = true;
+                if (config.mqtt) {
+                    mqttPub(config.mqttTopic + "/status/" + zonename + "/enabled", "1", {});
+                }
+
             resp = zones[i];
         }
     }
@@ -626,6 +630,9 @@ function _stopZone(zonename) {
             if (connectedDevices[i]) {
                 log.debug("Stopping zone " + zonename);
                 connectedDevices[i].stop();
+                if (config.mqtt) {
+                    mqttPub(config.mqttTopic + "/status/" + zonename + "/enabled", "0", {});
+                }
             }
             resp = zones[i];
         }
@@ -635,7 +642,7 @@ function _stopZone(zonename) {
 }
 
 
-// SHOW A ZONE
+// SHOW A ZONE - ONLY USED IN WEBUI SO NO OUTPUT TO MQTT
 function _showZone(zonename) {
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
@@ -648,7 +655,7 @@ function _showZone(zonename) {
 }
 
 
-// HIDE A ZONE
+// HIDE A ZONE - ONLY USED IN WEBUI SO NO OUTPUT TO MQTT
 function _hideZone(zonename) {
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
