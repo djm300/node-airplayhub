@@ -273,11 +273,12 @@ let server;
 
 
 // Input selector for multiroom hub
+// Loopback: connect to an ALSA loopback device to stream (untested)
 // Pipe: Read from pipe which is supposed to contain 16 bit 44100Hz audio
-// TCP: Open a TCP socket to which a client can connect. This pipe again should contain 16 bit 44100Hz audio
+// TCP: Open a TCP socket to which a client can connect. This pipe again should contain 16 bit 44100Hz audio (untested)
 // Airplay: Announce our hub as an airplay airtunesserver and as soon as someone connects, stream this data.
 function startPipe() {
-    // loopback device - pipe
+    // loopback device
     if (config.loopback) {
         // arecord
         // -f cd (16 bit little endian, 44100, stereo) 
@@ -291,6 +292,10 @@ function startPipe() {
         mqttPub(config.mqttTopic + '/connected', '2', {
             retain: true
         });
+
+        mqttPub(config.mqttTopic + '/status/input', 'loopback');
+
+
         server.on('exit', () => {
             connected = false;
             log.info('Loopback disconnected');
@@ -299,7 +304,40 @@ function startPipe() {
             });
         });
     }
-    if (config.tcplisten) {
+
+
+
+   // pipe
+    else if (config.inputpipe) {
+	// can also be tested with
+        // sox -S -t cdr /tmp/spotify -t cdr - > /dev/null
+
+        server = spawn('sox', ['-t', 'cdr', config.device, '-t', 'cdr', '-']);
+        // connect the output of arecord to airtunes
+        server.stdout.pipe(airtunes);
+        connected = true;
+        log.info('Pipe connected');
+        mqttPub(config.mqttTopic + '/connected', '2', {
+            retain: true
+        });
+
+        mqttPub(config.mqttTopic + '/status/input', 'pipe');
+
+        server.on('exit', () => {
+            connected = false;
+            log.info('Pipe disconnected');
+            mqttPub(config.mqttTopic + '/connected', '1', {
+                retain: true
+            });
+        });
+
+    }
+
+
+
+
+
+    else if (config.tcplisten) {
         // tcp server
         server = net.createServer(c => {
             log.info('tcp client', c.remoteAddress + ':' + c.remotePort, 'connected');
@@ -330,10 +368,14 @@ function startPipe() {
             connected = true;
         });
 
+        mqttPub(config.mqttTopic + '/status/input', 'tcp');
+
+
         server.listen(config.port, () => {
             log.info('tcp listener bound on port', config.port);
         });
-    } else {
+    } 
+    else {
         // airplay server
         // if someone connects to the airplay hub, stream in into the airtunes sink
 		
@@ -404,6 +446,9 @@ function startPipe() {
             _setCompositeVolume(data);
             clearTimeout(idleTimer);
         });
+
+        mqttPub(config.mqttTopic + '/status/input', 'airplay');
+
 
         server.start();
     }
