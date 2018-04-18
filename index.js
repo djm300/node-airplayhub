@@ -2,12 +2,13 @@
 
 // Import depencies
 var path = require('path');
-var fs = require('fs')
+var fs = require('fs');
 const express = require('express');
 const Mqtt = require('mqtt');
 const log = require('yalm');
-const airtunes = require('airtunes')
+const airtunes = require('airtunes');
 const airtunesserver = require('nodetunes');
+const net = require('net');
 const bonjour = require('bonjour')();
 var argv = require('minimist')(process.argv.slice(2));
 var app = express();
@@ -42,12 +43,12 @@ log.info('Application starting');
 
 // Read command line argument and see if there is a config file available - else read ./config.json
 if (argv.h || argv.help) {
-    console.log('usage: node-airplayhub [options]\n  options:\n    -c, --config     Path to config file')
+    console.log('usage: node-airplayhub [options]\n  options:\n    -c, --config     Path to config file');
     process.exit();
 } else {
     if (argv.c) configPath = argv.c;
     if (argv.config) configPath = argv.config;
-    if (!path.isAbsolute(configPath)) configPath = path.join(__dirname, configPath)
+    if (!path.isAbsolute(configPath)) configPath = path.join(__dirname, configPath);
 }
 
 // Try to read the config file. It it doesn't exist, create one.
@@ -103,7 +104,7 @@ if (config.mqtt) {
         mqtt.subscribe(topic);
         
         // For syncing any home assistant instances which are stateful, just list status and volume of zones for good measure
-        _statusAllZones()
+        _statusAllZones();
     });
 
     mqtt.on('close', () => {
@@ -245,6 +246,7 @@ if (config.mqtt) {
                     case 'get':
                         log.debug("MQTT requesting status of speaker volume");
                         _getVolume(speaker);
+                    	  break;
                     // set speaker volume
                     case 'set':
                         log.debug("MQTT requesting SETTING of speaker volume");
@@ -287,7 +289,6 @@ function startPipe() {
 
         // connect the output of arecord to airtunes
         server.stdout.pipe(airtunes);
-        connected = true;
         log.info('Loopback connected');
         mqttPub(config.mqttTopic + '/connected', '2', {
             retain: true
@@ -296,7 +297,6 @@ function startPipe() {
         mqttPub(config.mqttTopic + '/status/input', 'loopback');
 
         server.on('exit', () => {
-            connected = false;
             log.info('Loopback disconnected');
             mqttPub(config.mqttTopic + '/connected', '1', {
                 retain: true
@@ -314,7 +314,6 @@ function startPipe() {
         server = spawn('sox', ['-t', 'cdr', config.device, '-t', 'cdr', '-']);
         // connect the output of arecord to airtunes
         server.stdout.pipe(airtunes);
-        connected = true;
         log.info('Pipe connected');
         mqttPub(config.mqttTopic + '/connected', '2', {
             retain: true
@@ -323,7 +322,6 @@ function startPipe() {
         mqttPub(config.mqttTopic + '/status/input', 'pipe');
 
         server.on('exit', () => {
-            connected = false;
             log.info('Pipe disconnected');
             mqttPub(config.mqttTopic + '/connected', '1', {
                 retain: true
@@ -331,9 +329,6 @@ function startPipe() {
         });
 
     }
-
-
-
 
 
     else if (config.tcplisten) {
@@ -345,7 +340,6 @@ function startPipe() {
             });
 
             c.on('end', () => {
-                connected = false;
                 log.info('tcp client disconnected');
                 c.end();
                 mqttPub(config.mqttTopic + '/connected', '1', {
@@ -364,7 +358,6 @@ function startPipe() {
             c.pipe(airtunes, {
                 end: false
             });
-            connected = true;
         });
 
         mqttPub(config.mqttTopic + '/status/input', 'tcp');
@@ -467,7 +460,7 @@ app.use(express.static(path.join(__dirname, 'root'), {
 http.createServer(app).listen(config.webuiport);
 
 app.get('/', (req, res) => {
-    res.redirect('/Index.html')
+    res.redirect('/Index.html');
 });
 log.debug("Web page requested");
 
@@ -477,7 +470,7 @@ app.get('/startzone/:zonename', function (req, res) {
 
     log.debug("Zone start requested for " + zonename);
     
-    resp = _startZone(zonename);
+    var resp = _startZone(zonename);
     res.json(resp);
 });
 
@@ -487,7 +480,7 @@ app.get('/stopzone/:zonename', function (req, res) {
 
     log.debug("Zone stop requested for " + zonename);
 
-    resp = _stopZone(zonename);
+    var resp = _stopZone(zonename);
     res.json(resp);
 });
 
@@ -498,7 +491,7 @@ app.get('/setvol/:zonename/:volume', function (req, res) {
 
     log.debug("Volume change requested for " + zonename);
 
-    resp = _setVolume(zonename, volume);
+    var resp = _setVolume(zonename, volume);
     res.json(resp);
 });
 
@@ -519,7 +512,7 @@ app.get('/hidezone/:zonename', function (req, res) {
 
     log.debug("Zone hide requested for " + zonename);
 
-    resp = _hideZone(zonename);
+    var resp = _hideZone(zonename);
     res.json(resp);
 });
 
@@ -529,7 +522,7 @@ app.get('/showzone/:zonename', function (req, res) {
 
     log.debug("Zone show requested for " + zonename);
 
-    resp = _showZone(zonename);
+    var resp = _showZone(zonename);
     res.json(resp);
 });
 
@@ -567,14 +560,13 @@ function getArtwork(artist, album, callback) {
 // DISCOVERY FUNCTIONS FOR AIRPLAY DEVICES
 function getIPAddress(service) {
 
-    addresses = service.addresses;
+    var addresses = service.addresses;
     // Extract right IPv4 address
     var rx = /^(?!0)(?!.*\.$)((1?\d?\d|25[0-5]|2[0-4]\d)(\.|$)){4}$/;
     for (var a in addresses) {
         // Test if we can find an ipv4 address
         if (rx.test(addresses[a]) && addresses[a].lastIndexOf('169', 0) !== 0) {
             return addresses[a];
-            break;
         }
     }
 }
@@ -624,7 +616,7 @@ function validateDevice(service) {
         log.debug('Synced running config to config file');
     }
 
-};
+}
 
 // On termination signal
 process.on('SIGTERM', function () {
@@ -759,7 +751,7 @@ function _startZone(zonename) {
         error: "zone not found"
     };
     for (var i in zones) {
-        if (zones[i].name.toLowerCase() == zonename.toLowerCase() && zones[i].enabled == false) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase() && zones[i].enabled === false) {
             log.debug("Starting zone " + zonename);
             connectedDevices[i] = airtunes.add(zones[i].host, {
                 port: zones[i].port,
@@ -783,7 +775,7 @@ function _stopZone(zonename) {
         error: "zone not found"
     };
     for (var i in zones) {
-        if (zones[i].name.toLowerCase() == zonename.toLowerCase() && zones[i].enabled == true) {
+        if (zones[i].name.toLowerCase() == zonename.toLowerCase() && zones[i].enabled === true) {
             zones[i].enabled = false;
             if (connectedDevices[i]) {
                 log.debug("Stopping zone " + zonename);
@@ -837,21 +829,21 @@ function _setVolume(zonename, volume) {
     var resp = {
         error: "zone not found"
     };
-    log.info("Set volume requested for speaker " + zonename + " - set speaker volume to " + volume)
+    log.info("Set volume requested for speaker " + zonename + " - set speaker volume to " + volume);
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
             // Setting configured per-speaker volume
             zones[i].volume = volume;
             if (connectedDevices[i]) {
                 // And adjusting the mastervolume of this speaker if it's active on the airtunes server
-                log.info("Speaker active - scaling volume request with mastervolume to " + scaleSpeakerVolume(volume) + " for " + zonename)
+                log.info("Speaker active - scaling volume request with mastervolume to " + scaleSpeakerVolume(volume) + " for " + zonename);
                 connectedDevices[i].setVolume(scaleSpeakerVolume(volume));
                 if (config.mqtt) {
                     mqttPub(config.mqttTopic + "/status/" + zonename + "/volume", volume.toString(), {});
                 }
             }
             else {
-                log.info("Zone " + zonename + " not found - ignoring request")
+                log.info("Zone " + zonename + " not found - ignoring request");
             }
             resp = zones[i];
         }
@@ -866,18 +858,18 @@ function _getVolume(speaker) {
     var resp = {
         error: "zone not found"
     };
-    log.info("Get volume called for " + speaker)
+    log.info("Get volume called for " + speaker);
     for (var i in zones) {
         if (zones[i].name.toLowerCase() == speaker.toLowerCase()) {
             if (connectedDevices[i]) {
-                log.info("Zone get volume called for " + speaker)
-                zonevol = connectedDevices[i].volume;
+                log.info("Zone get volume called for " + speaker);
+                var zonevol = connectedDevices[i].volume;
                 if (config.mqtt) {
                     mqttPub(config.mqttTopic + "/status/" + speaker + "/volume", zonevol.toString(), {});
                 }
             }
             else {
-                log.info("Zone " + speaker + " not found - ignoring request")
+                log.info("Zone " + speaker + " not found - ignoring request");
             }
             resp = zones[i];
         }
@@ -902,16 +894,16 @@ function _masterRescale() {
         }
     }
     // MQTT publish new master volume for good measure
-    _getMasterVolume()
+    _getMasterVolume();
  }
 
 // input:  volume is -144 or (-30 to zero)
 // output: config.mastervolume between 0 & 100
 function _setMasterVolumeApple(volume)  {
     // TODO Check if volume is -144 or (30 to zero)
-    var _volume = (parseInt(message, 10));
+    var _volume = (parseInt(volume, 10));
     log.debug("Apple original master volume requested to change to " + _volume.toString());
-    var _volumerescaled= appleToRealVolume(_volume);
+    var _volumerescaled=parseAppleMasterVolume(_volume);
     log.debug("Changing master volume to " + _volumerescaled.toString());	
 
     // If OK THEN set master volume
@@ -921,14 +913,14 @@ function _setMasterVolumeApple(volume)  {
         log.debug("Setting master volume to " + volume);
         mqttPub(config.mqttTopic + "/status/GLOBAL/volume", volume.toString(), {});
     }
-    _masterRescale()
+    _masterRescale();
 }
 
 // input:  volume is 0 - 100
 // output: config.mastervolume between 0 & 100
 function _setMasterVolume(volume) {
     // TODO Check if volume is 0 - 100
-    var _volume = (parseInt(message, 10));
+    var _volume = (parseInt(volume, 10));
     log.debug("Master volume changed to " + _volume.toString());
 
     // If OK THEN set master volume
@@ -938,7 +930,7 @@ function _setMasterVolume(volume) {
         log.debug("Setting master volume to " + volume);
         mqttPub(config.mqttTopic + "/status/GLOBAL/volume", volume.toString(), {});
     }
-    _masterRescale()
+    _masterRescale();
 }
 
 // output: Publish  config.mastervolume between 0 & 100
