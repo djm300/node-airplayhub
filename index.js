@@ -3,8 +3,6 @@
 // Import depencies
 const path = require('path');
 const fs = require('fs');
-const net = require('net');
-const express = require('express');
 const Mqtt = require('mqtt');
 const log = require('yalm');
 const airtunes = require('airtunes');
@@ -12,9 +10,12 @@ const airtunesserver = require('nodetunes');
 const bonjour = require('bonjour')();
 const argv = require('minimist')(process.argv.slice(2));
 
-const app = express();
+const net = require('net');
+const express = require('express');
 const http = require('http');
 const spawn = require('child_process').spawn;
+
+const app = express();
 
 // Set configuration file template
 let config = {
