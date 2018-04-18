@@ -681,7 +681,7 @@ function mqttPub(topic, payload, options) {
 function parseAppleMasterVolume(vol) {
     log.debug("Calculating master volume from input Apple volume " + vol);
     var _vol = parseInt(vol, 10);
-    if ( isNaN(_vol) or (! (_vol == -144 || (_vol > -30 && vol < 0))) ) { 
+    if ( isNaN(_vol) || (! (_vol == -144 || (_vol > -30 && vol < 0))) ) { 
 	    log.debug("Requested master volume invalid " + vol);
 	    return 0;
     }
@@ -695,7 +695,7 @@ function parseAppleMasterVolume(vol) {
 function parseMasterVolume(vol) {
     log.debug("Calculating master volume from regular input volume " + vol);
     var _vol = parseInt(vol, 10);
-    if ( isNaN(_vol) or (!(_vol > 0 && vol < 100)) ) { 
+    if ( isNaN(_vol) || (!(_vol > 0 && vol < 100)) ) { 
 	    log.debug("Requested master volume invalid " + vol);
 	    return 0;
     }
