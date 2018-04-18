@@ -392,7 +392,7 @@ function startPipe() {
                     log.info("Starting to stream to enabled zone " + zones[i].name);
                     connectedDevices[i] = airtunes.add(zones[i].host, {
                         port: zones[i].port,
-                        volume: compositeVolume(zones[i].volume)
+                        volume: scaleSpeakerVolume(zones[i].volume)
                     });
                 }
             }
@@ -431,7 +431,7 @@ function startPipe() {
 
 
         // This is a master change volume coming from the audio source, e.g. your iphone with Spotify. This will take that volume and translate that to a new volume level for every active speaker.
-        // Composite volume is between -30 & 0 (or -144 for mute) which needs to be translated into the GLOBAL volume 0-100. Per zone volume is also between 0 & 100
+        // Master volume is between -30 & 0 (or -144 for mute) which needs to be translated into the GLOBAL volume 0-100. Per zone volume is also between 0 & 100
 
         /* Note on mastervolume: This is the volume used to scale the speaker volume WHEN it is playing on the airtunes server. 
            speaker.volume is a configuration value kept locally. When the speaker volume is changed and the speaker is active, only then 
@@ -682,13 +682,45 @@ function mqttPub(topic, payload, options) {
 
 
 // Assist functions
-// Calculate master volume
-function appleToRealVolume(vol) {
-    log.debug("Calculating compositeVolume for vol " + vol);
-    //    log.debug("Setting volume to "+Math.round(vol*(config.mastervolume+30)/30.));
-    return (config.mastervolume == -144 ? 0 :
-        Math.round(vol * (config.mastervolume + 30) / 30.));
+
+// Calculate master volume (0-100) from Apple device input volume (-144, -30 to 0)
+// Input: (-144, -30 to 0)
+// Output: 0-100 (0 if input is not valid)
+function parseAppleMasterVolume(vol) {
+    log.debug("Calculating master volume from input Apple volume " + vol);
+    var _vol = parseInt(vol, 10);
+    if ( isNaN(_vol) or (! (_vol == -144 || (_vol > -30 && vol < 0))) ) { 
+	    log.debug("Requested master volume invalid " + vol);
+	    return 0;
+    }
+    return (_vol == -144 ? 0 :
+        Math.round( (_vol + 30) / 0.3));
 }
+
+// Calculate master volume (0-100) from requested master volume (0 to 100)
+// Input:  0-100
+// Output: 0-100 (0 if input is not valid)
+function parseMasterVolume(vol) {
+    log.debug("Calculating master volume from regular input volume " + vol);
+    var _vol = parseInt(vol, 10);
+    if ( isNaN(_vol) or (!(_vol > 0 && vol < 100)) ) { 
+	    log.debug("Requested master volume invalid " + vol);
+	    return 0;
+    }
+    return (_vol);
+}
+
+// Calculate speaker volume (0-100) from requested speaker volume and master volume (both 0 to 100)
+// Input: (0-100) speaker volume request
+// Output: 0-100 active speaker volume
+function scaleSpeakerVolume(vol) {
+    var _scaledvol = parseMasterVolume(vol)*config.mastervolume/100;
+
+    log.debug("Scaling speaker volume for requested speaker vol " + vol + " and master volume "+config.mastervolume + " to "+ _scaledvol);
+
+    return (_scaledvol);
+}
+
 
 
 // LIST STATUS OF ALL ZONES ON MQTT CONNECT (IF MQTT ENABLED)
@@ -731,7 +763,7 @@ function _startZone(zonename) {
             log.debug("Starting zone " + zonename);
             connectedDevices[i] = airtunes.add(zones[i].host, {
                 port: zones[i].port,
-                volume: compositeVolume(zones[i].volume)
+                volume: scaleSpeakerVolume(zones[i].volume)
             });
             zones[i].enabled = true;
                 if (config.mqtt) {
@@ -812,8 +844,8 @@ function _setVolume(zonename, volume) {
             zones[i].volume = volume;
             if (connectedDevices[i]) {
                 // And adjusting the mastervolume of this speaker if it's active on the airtunes server
-                log.info("Speaker active - scaling volume request with mastervolume to " + compositeVolume(volume) + " for " + zonename)
-                connectedDevices[i].setVolume(compositeVolume(volume));
+                log.info("Speaker active - scaling volume request with mastervolume to " + scaleSpeakerVolume(volume) + " for " + zonename)
+                connectedDevices[i].setVolume(scaleSpeakerVolume(volume));
                 if (config.mqtt) {
                     mqttPub(config.mqttTopic + "/status/" + zonename + "/volume", volume.toString(), {});
                 }
@@ -856,13 +888,13 @@ function _getVolume(speaker) {
 // Input: None
 // Output: None
 // Action: Re-sets all speaker volumes based on requested speaker volume and the master volume
-function _compositeRescale() {
+function _masterRescale() {
     // For all active speakers
     for (var i in zones) {
         if (zones[i].enabled) {
             // Re-scale the existing per-speaker volume with the new master volume
-            connectedDevices[i].setVolume(compositeVolume(zones[i].volume));
-            log.info("Rescale volume for zone " + zones[i].name + " to " + compositeVolume(zones[i].volume));
+            connectedDevices[i].setVolume(scaleSpeakerVolume(zones[i].volume));
+            log.info("Rescale volume for zone " + zones[i].name + " to " + scaleSpeakerVolume(zones[i].volume));
             if (config.mqtt) {
                 // MQTT publish all new volumes to sync home assistant
                 _getVolume(zones[i].name);
@@ -889,7 +921,7 @@ function _setMasterVolumeApple(volume)  {
         log.debug("Setting master volume to " + volume);
         mqttPub(config.mqttTopic + "/status/GLOBAL/volume", volume.toString(), {});
     }
-    _compositeRescale()
+    _masterRescale()
 }
 
 // input:  volume is 0 - 100
@@ -897,7 +929,7 @@ function _setMasterVolumeApple(volume)  {
 function _setMasterVolume(volume) {
     // TODO Check if volume is 0 - 100
     var _volume = (parseInt(message, 10));
-    log.debug("Composite volume changed to " + _volume.toString());
+    log.debug("Master volume changed to " + _volume.toString());
 
     // If OK THEN set master volume
     config.mastervolume = _volume;  // 0 - 100
@@ -906,7 +938,7 @@ function _setMasterVolume(volume) {
         log.debug("Setting master volume to " + volume);
         mqttPub(config.mqttTopic + "/status/GLOBAL/volume", volume.toString(), {});
     }
-    _compositeRescale()
+    _masterRescale()
 }
 
 // output: Publish  config.mastervolume between 0 & 100
