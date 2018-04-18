@@ -424,6 +424,7 @@ function startPipe() {
 			clearTimeout(idleTimer);
 		});
 
+		log.info("Airplay hub input mode");
 		mqttPub(config.mqttTopic + '/status/input', 'airplay');
 
 		server.start();
