@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 // Import depencies
+const spawn = require('child_process').spawn;
+
 const path = require('path');
 const fs = require('fs');
 const log = require('yalm');
@@ -8,7 +10,6 @@ const airtunes = require('airtunes');
 const airtunesserver = require('nodetunes');
 const bonjour = require('bonjour')();
 const argv = require('minimist')(process.argv.slice(2));
-const spawn = require('child_process').spawn;
 
 const net = require('net');
 const http = require('http');
@@ -553,7 +554,7 @@ function validateDevice(service) {
 	service.name = service.name.split('@')[1];
 
 	// Ignore self
-	if (service.name == config.servername) {
+	if (service.name === config.servername) {
 		return;
 	}
 
@@ -561,13 +562,13 @@ function validateDevice(service) {
 	let zoneUnknown = true;
 	let zoneChanged = false;
 	for (const i in zones) {
-		if (zones[i].name.toLowerCase() == service.name.toLowerCase()) {
+		if (zones[i].name.toLowerCase() === service.name.toLowerCase()) {
 			// Duplicate found which already existed in the config. Mind we match on the fqdn the host claims to have.
-			if (service.ip != zones[i].host) {
+			if (service.ip !== zones[i].host) {
 				zones[i].host = service.ip;
 				zoneChanged = true;
 			}
-			if (service.port != zones[i].port) {
+			if (service.port !== zones[i].port) {
 				zones[i].port = service.port;
 				zoneChanged = true;
 			}
@@ -652,11 +653,11 @@ function mqttPub(topic, payload, options) {
 function parseAppleMasterVolume(vol) {
 	log.debug('Calculating master volume from input Apple volume ' + vol);
 	const _vol = parseInt(vol, 10);
-	if (isNaN(_vol) || (!(_vol == -144 || (_vol > -30 && vol < 0)))) {
+	if (isNaN(_vol) || (!(_vol === -144 || (_vol > -30 && vol < 0)))) {
 		log.debug('Requested master volume invalid ' + vol);
 		return 0;
 	}
-	return (_vol == -144 ? 0 :
+	return (_vol === -144 ? 0 :
 		Math.round((_vol + 30) / 0.3));
 }
 
@@ -700,8 +701,8 @@ function _statusZone(zonename) {
 		error: 'zone not found'
 	};
 	for (const i in zones) {
-		if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
-			const zonestatus = (zones[i].enabled == 2 ? '1' : '0');
+		if (zones[i].name.toLowerCase() === zonename.toLowerCase()) {
+			const zonestatus = (zones[i].enabled === 2 ? '1' : '0');
 			if (config.mqtt) {
 				mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', zonestatus, {});
 			}
@@ -718,7 +719,7 @@ function _startZone(zonename) {
 		error: 'zone not found'
 	};
 	for (const i in zones) {
-		if (zones[i].name.toLowerCase() == zonename.toLowerCase() && zones[i].enabled === false) {
+		if (zones[i].name.toLowerCase() === zonename.toLowerCase() && zones[i].enabled === false) {
 			log.debug('Starting zone ' + zonename);
 			connectedDevices[i] = airtunes.add(zones[i].host, {
 				port: zones[i].port,
@@ -742,7 +743,7 @@ function _stopZone(zonename) {
 		error: 'zone not found'
 	};
 	for (const i in zones) {
-		if (zones[i].name.toLowerCase() == zonename.toLowerCase() && zones[i].enabled === true) {
+		if (zones[i].name.toLowerCase() === zonename.toLowerCase() && zones[i].enabled === true) {
 			zones[i].enabled = false;
 			if (connectedDevices[i]) {
 				log.debug('Stopping zone ' + zonename);
@@ -764,7 +765,7 @@ function _showZone(zonename) {
 		error: 'zone not found'
 	};
 	for (const i in zones) {
-		if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+		if (zones[i].name.toLowerCase() === zonename.toLowerCase()) {
 			zones[i].hidden = false;
 			resp = zones[i];
 		}
@@ -779,7 +780,7 @@ function _hideZone(zonename) {
 		error: 'zone not found'
 	};
 	for (const i in zones) {
-		if (zones[i].name.toLowerCase() == zonename.toLowerCase()) {
+		if (zones[i].name.toLowerCase() === zonename.toLowerCase()) {
 			zones[i].hidden = true;
 			resp = zones[i];
 		}
@@ -822,7 +823,7 @@ function _getVolume(speaker) {
 	};
 	log.info('Get volume called for ' + speaker);
 	for (const i in zones) {
-		if (zones[i].name.toLowerCase() == speaker.toLowerCase()) {
+		if (zones[i].name.toLowerCase() === speaker.toLowerCase()) {
 			if (connectedDevices[i]) {
 				log.info('Zone get volume called for ' + speaker);
 				const zonevol = connectedDevices[i].volume;
@@ -906,7 +907,7 @@ function _getMasterVolume() {
 function _isSpeakerKnown(speaker) {
 	// Check whether this message is about GLOBAL or a specific speaker which we know about
 	for (const i in zones) {
-		if (zones[i].name.toLowerCase() == speaker.toLowerCase() || speaker.toLowerCase() == 'GLOBAL'.toLowerCase()) {
+		if (zones[i].name.toLowerCase() === speaker.toLowerCase() || speaker.toLowerCase() === 'GLOBAL'.toLowerCase()) {
 			// This is a known speaker - continue parsing
 			return true;
 		}
@@ -917,7 +918,7 @@ function _isSpeakerKnown(speaker) {
 
 // Msgtype is a string: get, set or status
 function _isStatusMessage(msgtype) {
-	if (msgtype.toLowerCase() == 'status') {
+	if (msgtype.toLowerCase() === 'status') {
 		return true;
 	}
 	return false;
@@ -925,7 +926,7 @@ function _isStatusMessage(msgtype) {
 
 // Speaker is a string, the speakername
 function _isGlobalVolumeMessage(speaker) {
-	if (speaker.toLowerCase() == 'GLOBAL'.toLowerCase()) {
+	if (speaker.toLowerCase() === 'GLOBAL'.toLowerCase()) {
 		// This request is about GLOBAL volume
 		return true;
 	}
