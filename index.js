@@ -853,7 +853,6 @@ function _getVolume(speaker) {
 			return zonevol;
 		}
 	}
-}
 
 // If we change the master volume while speakers are replaying, we need to re-scale all the enabled zones.
 // Input: None
