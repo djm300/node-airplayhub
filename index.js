@@ -732,7 +732,15 @@ function _startZone(zonename) {
 			}
 
 			resp = zones[i];
-		}
+		} else if (zones[i].name.toLowerCase() === zonename.toLowerCase() && zones[i].enabled === true) {
+			// TODO publish status on this zone. It's already enabled
+
+                        log.debug('Zone already enabled - ' + zonename);
+                        if (config.mqtt) {
+                                mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', '1', {});
+                        }
+
+    		}
 	}
 	fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
 	return resp;
@@ -754,7 +762,15 @@ function _stopZone(zonename) {
 				}
 			}
 			resp = zones[i];
-		}
+		} else if (zones[i].name.toLowerCase() === zonename.toLowerCase() && zones[i].enabled === false) {
+                        // TODO publish status on this zone. It's already disabled
+
+                        log.debug('Zone already disabled - ' + zonename);
+                        if (config.mqtt) {
+                                mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', '0', {});
+                        }
+
+                }
 	}
 	fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
 	return resp;
@@ -848,8 +864,9 @@ function _masterRescale() {
 	for (const i in zones) {
 		if (zones[i].enabled) {
 			// Re-scale the existing per-speaker volume with the new master volume
-			connectedDevices[i].volume(_scaleSpeakerVolume(zones[i].volume));
+
 			log.info('Rescale volume for zone ' + zones[i].name + ' to ' + _scaleSpeakerVolume(zones[i].volume));
+			connectedDevices[i].volume(_scaleSpeakerVolume(zones[i].volume));
 			if (config.mqtt) {
 				// MQTT publish all new volumes to sync home assistant
 				_getVolume(zones[i].name);
