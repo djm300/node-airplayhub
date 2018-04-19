@@ -719,7 +719,7 @@ function _statusZone(zonename) {
 	};
 	for (const i in zones) {
 		if (zones[i].name.toLowerCase() === zonename.toLowerCase()) {
-			const zonestatus = (zones[i].enabled === 2 ? '1' : '0');
+			const zonestatus = (zones[i].enabled === true ? '1' : '0');
 			if (config.mqtt) {
 				mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', zonestatus, {});
 			}
