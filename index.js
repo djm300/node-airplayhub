@@ -882,7 +882,7 @@ function _setMasterVolumeApple(volume) {
 // output: config.mastervolume between 0 & 100
 function _setMasterVolume(volume) {
 
-	config.mastervolume = _parseMasterVolume(`volume);
+	config.mastervolume = _parseMasterVolume(volume);
 
 	if (config.mqtt) {
 		log.debug('Setting master volume to ' + config.mastervolume);
