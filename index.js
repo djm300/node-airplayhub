@@ -746,7 +746,15 @@ function _startZone(zonename) {
 						log.debug('Zone config not in sync - ' + zonename);
 						zones[i].enabled == false;
 
-						_startZone(zones[i].name);
+						connectedDevices[i] = airtunes.add(zones[i].host, {
+							port: zones[i].port,
+							volume: _scaleSpeakerVolume(zones[i].volume)
+						});
+						zones[i].enabled = true;
+						if (config.mqtt) {
+							mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', '1', {});
+						}
+			
     		}
 	}
 	fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
