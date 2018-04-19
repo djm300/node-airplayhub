@@ -872,8 +872,8 @@ function _setMasterVolumeApple(volume) {
 	config.mastervolume = _volumerescaled; // 0 to 100
 
 	if (config.mqtt) {
-		log.debug('Setting master volume to ' + config.mastervolume);
-		mqttPub(config.mqttTopic + '/status/GLOBAL/volume', config.mastervolume, {});
+		log.debug('Setting master volume to ' + config.mastervolume.toString());
+		mqttPub(config.mqttTopic + '/status/GLOBAL/volume', config.mastervolume.toString(), {});
 	}
 	_masterRescale();
 }
@@ -885,8 +885,8 @@ function _setMasterVolume(volume) {
 	config.mastervolume = _parseMasterVolume(volume);
 
 	if (config.mqtt) {
-		log.debug('Setting master volume to ' + config.mastervolume);
-		mqttPub(config.mqttTopic + '/status/GLOBAL/volume', config.mastervolume, {});
+		log.debug('Setting master volume to ' + config.mastervolume.toString());
+		mqttPub(config.mqttTopic + '/status/GLOBAL/volume', config.mastervolume.toString(), {});
 	}
 	_masterRescale();
 }
@@ -894,8 +894,8 @@ function _setMasterVolume(volume) {
 // Output: Publish  config.mastervolume between 0 & 100
 function _getMasterVolume() {
 	if (config.mqtt) {
-		log.debug('Publishing master volume ' + config.mastervolume);
-		mqttPub(config.mqttTopic + '/status/GLOBAL/volume', config.mastervolume, {});
+		log.debug('Publishing master volume ' + config.mastervolume.toString());
+		mqttPub(config.mqttTopic + '/status/GLOBAL/volume', config.mastervolume.toString(), {});
 	}
 }
 
