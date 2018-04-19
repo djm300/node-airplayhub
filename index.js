@@ -735,27 +735,27 @@ function _startZone(zonename) {
 		} else if (zones[i].name.toLowerCase() === zonename.toLowerCase() && zones[i].enabled === true && connectedDevices[i]) {
 			// Zone enabled and playing already -  publish status on this zone. 
 
-                        log.debug('Zone already enabled - ' + zonename);
-                        if (config.mqtt) {
-                                mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', '1', {});
-                        }
+			log.debug('Zone already enabled - ' + zonename);
+			if (config.mqtt) {
+				mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', '1', {});
+			}
 
-    	  } else if (zones[i].name.toLowerCase() === zonename.toLowerCase() && zones[i].enabled === true) {
+		} else if (zones[i].name.toLowerCase() === zonename.toLowerCase() && zones[i].enabled === true) {
 			// Zone enabled and NOT playing  -  publish status on this zone. 
 
-						log.debug('Zone config not in sync - ' + zonename);
-						zones[i].enabled == false;
+			log.debug('Zone config not in sync - ' + zonename);
+			zones[i].enabled == false;
 
-						connectedDevices[i] = airtunes.add(zones[i].host, {
-							port: zones[i].port,
-							volume: _scaleSpeakerVolume(zones[i].volume)
-						});
-						zones[i].enabled = true;
-						if (config.mqtt) {
-							mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', '1', {});
-						}
-			
-    		}
+			connectedDevices[i] = airtunes.add(zones[i].host, {
+				port: zones[i].port,
+				volume: _scaleSpeakerVolume(zones[i].volume)
+			});
+			zones[i].enabled = true;
+			if (config.mqtt) {
+				mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', '1', {});
+			}
+
+		}
 	}
 	fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
 	return resp;
@@ -778,14 +778,14 @@ function _stopZone(zonename) {
 			}
 			resp = zones[i];
 		} else if (zones[i].name.toLowerCase() === zonename.toLowerCase() && zones[i].enabled === false) {
-                        // TODO publish status on this zone. It's already disabled
+			// TODO publish status on this zone. It's already disabled
 
-                        log.debug('Zone already disabled - ' + zonename);
-                        if (config.mqtt) {
-                                mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', '0', {});
-                        }
+			log.debug('Zone already disabled - ' + zonename);
+			if (config.mqtt) {
+				mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', '0', {});
+			}
 
-                }
+		}
 	}
 	fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
 	return resp;
@@ -840,10 +840,10 @@ function _setVolume(zonename, volume) {
 				}
 			} else {
 				// Edge case: speaker is known but not in connected devices. If we are recovering from a crash, the config could still have this speaker enabled. Disable it to make sure.
-				if (zones[i].enabled === true)  {
-					 zones[i].enabled === false;
-					 log.info('Zone ' + zonename + ' enabled but not active and volume set requested - ignoring request and disabling zone');
-					}
+				if (zones[i].enabled === true) {
+					zones[i].enabled === false;
+					log.info('Zone ' + zonename + ' enabled but not active and volume set requested - ignoring request and disabling zone');
+				}
 				// and log it
 				log.info('Zone ' + zonename + ' not found but volume set requested - ignoring request');
 			}
@@ -867,13 +867,14 @@ function _getVolume(speaker) {
 			if (config.mqtt) {
 				mqttPub(config.mqttTopic + '/status/' + speaker + '/volume', zonevol.toString(), {});
 			}
-			} else {
-				log.info('Zone ' + speaker + ' not found - ignoring request');
-			}
+
 			resp = zones[i];
 			return zonevol;
 		}
+
 	}
+	log.info('Zone ' + speaker + ' not found - ignoring request');
+}
 
 // If we change the master volume while speakers are replaying, we need to re-scale all the enabled zones.
 // Input: None
