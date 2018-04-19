@@ -433,6 +433,22 @@ function startPipe() {
 
 startPipe();
 
+// Apply config - if speakers were enabled, start those zones
+log.info("Checking which zones need to be started according to the config file");
+for (const i in zones) {
+	if (zones[i].enabled === true) {
+		log.debug('Starting configuration-enabled zone ' + zonename);
+		connectedDevices[i] = airtunes.add(zones[i].host, {
+			port: zones[i].port,
+			volume: _scaleSpeakerVolume(zones[i].volume)
+		});
+		zones[i].enabled = true;
+		if (config.mqtt) {
+			mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', '1', {});
+		}
+	}
+}
+
 app.use('/icons', express.static(path.join(__dirname, 'root/icons'), {
 	maxAge: '1y'
 }));
