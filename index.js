@@ -732,14 +732,21 @@ function _startZone(zonename) {
 			}
 
 			resp = zones[i];
-		} else if (zones[i].name.toLowerCase() === zonename.toLowerCase() && zones[i].enabled === true) {
-			// TODO publish status on this zone. It's already enabled
+		} else if (zones[i].name.toLowerCase() === zonename.toLowerCase() && zones[i].enabled === true && connectedDevices[i]) {
+			// Zone enabled and playing already -  publish status on this zone. 
 
                         log.debug('Zone already enabled - ' + zonename);
                         if (config.mqtt) {
                                 mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', '1', {});
                         }
 
+    	  } else if (zones[i].name.toLowerCase() === zonename.toLowerCase() && zones[i].enabled === true) {
+			// Zone enabled and NOT playing  -  publish status on this zone. 
+
+						log.debug('Zone config not in sync - ' + zonename);
+						zones[i].enabled == false;
+
+						_startZone(zones[i].name);
     		}
 	}
 	fs.writeFileSync(configPath, JSON.stringify(config, null, 4));
