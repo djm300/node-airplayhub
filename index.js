@@ -873,7 +873,7 @@ function _setMasterVolumeApple(volume) {
 
 	if (config.mqtt) {
 		log.debug('Setting master volume to ' + config.mastervolume);
-		mqttPub(config.mqttTopic + '/status/GLOBAL/volume', config.mastervolume.toString(), {});
+		mqttPub(config.mqttTopic + '/status/GLOBAL/volume', config.mastervolume, {});
 	}
 	_masterRescale();
 }
@@ -886,7 +886,7 @@ function _setMasterVolume(volume) {
 
 	if (config.mqtt) {
 		log.debug('Setting master volume to ' + config.mastervolume);
-		mqttPub(config.mqttTopic + '/status/GLOBAL/volume', config.mastervolume.toString(), {});
+		mqttPub(config.mqttTopic + '/status/GLOBAL/volume', config.mastervolume, {});
 	}
 	_masterRescale();
 }
