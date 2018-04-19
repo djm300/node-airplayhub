@@ -840,17 +840,17 @@ function _getVolume(speaker) {
 	};
 	log.info('Get volume called for ' + speaker);
 	for (const i in zones) {
-		if (zones[i].name.toLowerCase() === speaker.toLowerCase()) {
-			if (connectedDevices[i]) {
-				log.info('Zone get volume called for ' + speaker);
-				const zonevol = connectedDevices[i].volume;
-				if (config.mqtt) {
-					mqttPub(config.mqttTopic + '/status/' + speaker + '/volume', zonevol.toString(), {});
-				}
+		if (zones[i].name.toLowerCase() === speaker.toLowerCase() && speaker !== 'GLOBAL') {
+			log.info('Zone get volume called for ' + speaker);
+			const zonevol = zones[i].volume;
+			if (config.mqtt) {
+				mqttPub(config.mqttTopic + '/status/' + speaker + '/volume', zonevol.toString(), {});
+			}
 			} else {
 				log.info('Zone ' + speaker + ' not found - ignoring request');
 			}
 			resp = zones[i];
+			return zonevol;
 		}
 	}
 }
