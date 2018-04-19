@@ -437,14 +437,14 @@ startPipe();
 log.info("Checking which zones need to be started according to the config file");
 for (const i in zones) {
 	if (zones[i].enabled === true) {
-		log.debug('Starting configuration-enabled zone ' + zonename);
+		log.debug('Starting configuration-enabled zone ' + zones[i].name);
 		connectedDevices[i] = airtunes.add(zones[i].host, {
 			port: zones[i].port,
 			volume: _scaleSpeakerVolume(zones[i].volume)
 		});
 		zones[i].enabled = true;
 		if (config.mqtt) {
-			mqttPub(config.mqttTopic + '/status/' + zonename + '/enabled', '1', {});
+			mqttPub(config.mqttTopic + '/status/' + zones[i].name + '/enabled', '1', {});
 		}
 	}
 }
