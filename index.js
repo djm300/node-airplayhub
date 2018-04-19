@@ -654,7 +654,7 @@ function mqttPub(topic, payload, options) {
 function _parseAppleMasterVolume(vol) {
 	log.debug('Calculating master volume from input Apple volume ' + vol);
 	const _vol = parseInt(vol, 10);
-	if (isNaN(_vol) || (!(_vol === -144 || (_vol > -30 && vol < 0)))) {
+	if (isNaN(_vol) || (!(_vol === -144 || (_vol >= -30 && vol <= 0)))) {
 		log.debug('Requested master volume invalid ' + vol);
 		return 0;
 	}
@@ -665,10 +665,10 @@ function _parseAppleMasterVolume(vol) {
 // Calculate master volume (0-100) from requested master volume (0 to 100)
 // Input:  0-100
 // Output: 0-100 (0 if input is not valid)
-function _parseMasterVolume(vol) {
+function _parseVolume(vol) {
 	log.debug('Calculating master volume from regular input volume ' + vol);
 	const _vol = parseInt(vol, 10);
-	if (isNaN(_vol) || (!(_vol > 0 && vol < 100))) {
+	if (isNaN(_vol) || (!(_vol >= 0 && vol <= 100))) {
 		log.debug('Requested master volume invalid ' + vol);
 		return 0;
 	}
@@ -679,9 +679,9 @@ function _parseMasterVolume(vol) {
 // Input: (0-100) speaker volume request
 // Output: 0-100 active speaker volume
 function _scaleSpeakerVolume(vol) {
-	const _scaledvol = _parseMasterVolume(vol) * config.mastervolume / 100;
+	const _scaledvol = _parseVolume(vol) * config.mastervolume / 100;
 
-	log.debug('Scaling speaker volume for requested speaker vol ' + _parseMasterVolume(vol) + ' and master volume ' + config.mastervolume + ' to ' + _scaledvol);
+	log.debug('Scaling speaker volume for requested speaker vol ' + _parseVolume(vol) + ' and master volume ' + config.mastervolume + ' to ' + _scaledvol);
 
 	return (_scaledvol);
 }
@@ -904,7 +904,7 @@ function _setMasterVolumeApple(volume) {
 // output: config.mastervolume between 0 & 100
 function _setMasterVolume(volume) {
 
-	config.mastervolume = _parseMasterVolume(volume);
+	config.mastervolume = _parseVolume(volume);
 
 	if (config.mqtt) {
 		log.debug('Setting master volume to ' + config.mastervolume.toString());
