@@ -681,7 +681,7 @@ function _parseMasterVolume(vol) {
 function _scaleSpeakerVolume(vol) {
 	const _scaledvol = _parseMasterVolume(vol) * config.mastervolume / 100;
 
-	log.debug('Scaling speaker volume for requested speaker vol ' + vol + ' and master volume ' + config.mastervolume + ' to ' + _scaledvol);
+	log.debug('Scaling speaker volume for requested speaker vol ' + _parseMasterVolume(vol) + ' and master volume ' + config.mastervolume + ' to ' + _scaledvol);
 
 	return (_scaledvol);
 }
