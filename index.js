@@ -848,7 +848,7 @@ function _masterRescale() {
 	for (const i in zones) {
 		if (zones[i].enabled) {
 			// Re-scale the existing per-speaker volume with the new master volume
-			connectedDevices[i].setVolume(_scaleSpeakerVolume(zones[i].volume));
+			connectedDevices[i].volume(_scaleSpeakerVolume(zones[i].volume));
 			log.info('Rescale volume for zone ' + zones[i].name + ' to ' + _scaleSpeakerVolume(zones[i].volume));
 			if (config.mqtt) {
 				// MQTT publish all new volumes to sync home assistant
