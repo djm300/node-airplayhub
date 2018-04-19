@@ -824,7 +824,13 @@ function _setVolume(zonename, volume) {
 					mqttPub(config.mqttTopic + '/status/' + zonename + '/volume', volume.toString(), {});
 				}
 			} else {
-				log.info('Zone ' + zonename + ' not found - ignoring request');
+				// Edge case: speaker is known but not in connected devices. If we are recovering from a crash, the config could still have this speaker enabled. Disable it to make sure.
+				if (zones[i].enabled === true)  {
+					 zones[i].enabled === false;
+					 log.info('Zone ' + zonename + ' enabled but not active and volume set requested - ignoring request and disabling zone');
+					}
+				// and log it
+				log.info('Zone ' + zonename + ' not found but volume set requested - ignoring request');
 			}
 			resp = zones[i];
 		}
@@ -842,7 +848,7 @@ function _getVolume(speaker) {
 	for (const i in zones) {
 		if (zones[i].name.toLowerCase() === speaker.toLowerCase() && speaker !== 'GLOBAL') {
 			log.info('Zone get volume called for ' + speaker);
-			const zonevol = zones[i].volume;
+			var zonevol = zones[i].volume;
 			if (config.mqtt) {
 				mqttPub(config.mqttTopic + '/status/' + speaker + '/volume', zonevol.toString(), {});
 			}
@@ -865,7 +871,7 @@ function _masterRescale() {
 			// Re-scale the existing per-speaker volume with the new master volume
 
 			log.info('Rescale volume for zone ' + zones[i].name + ' to ' + _scaleSpeakerVolume(zones[i].volume));
-			connectedDevices[i].setVolume(_scaleSpeakerVolume(zones[i].volume));
+			_setVolume(zones[i].name, zones[i].volume)
 			if (config.mqtt) {
 				// MQTT publish all new volumes to sync home assistant
 				_getVolume(zones[i].name);
