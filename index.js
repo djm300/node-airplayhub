@@ -290,7 +290,7 @@ function startPipe() {
 		// Connect the output of arecord to airtunes
 		server.stdout.pipe(airtunes);
 		log.info('Loopback connected');
-		mqttPub(config.mqttTopic + '/connected', '2', {
+		mqttPub(config.mqttTopic + '/status/connected', '2', {
 			retain: true
 		});
 
@@ -298,7 +298,7 @@ function startPipe() {
 
 		server.on('exit', () => {
 			log.info('Loopback disconnected');
-			mqttPub(config.mqttTopic + '/connected', '1', {
+			mqttPub(config.mqttTopic + '/status/connected', '1', {
 				retain: true
 			});
 		});
@@ -310,7 +310,7 @@ function startPipe() {
 		// Connect the output of arecord to airtunes
 		server.stdout.pipe(airtunes);
 		log.info('Pipe connected');
-		mqttPub(config.mqttTopic + '/connected', '2', {
+		mqttPub(config.mqttTopic + '/status/connected', '2', {
 			retain: true
 		});
 
@@ -318,7 +318,7 @@ function startPipe() {
 
 		server.on('exit', () => {
 			log.info('Pipe disconnected');
-			mqttPub(config.mqttTopic + '/connected', '1', {
+			mqttPub(config.mqttTopic + '/status/connected', '1', {
 				retain: true
 			});
 		});
@@ -326,14 +326,14 @@ function startPipe() {
 		// Tcp server
 		server = net.createServer(c => {
 			log.info('tcp client', c.remoteAddress + ':' + c.remotePort, 'connected');
-			mqttPub(config.mqttTopic + '/connected', '2', {
+			mqttPub(config.mqttTopic + '/status/connected', '2', {
 				retain: true
 			});
 
 			c.on('end', () => {
 				log.info('tcp client disconnected');
 				c.end();
-				mqttPub(config.mqttTopic + '/connected', '1', {
+				mqttPub(config.mqttTopic + '/status/connected', '1', {
 					retain: true
 				});
 			});
